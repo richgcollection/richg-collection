@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
+import { TrackEvent } from '@/components/analytics/TrackEvent'
 import { VariantSelector } from '@/components/storefront/VariantSelector'
 import { getProductBySlug } from '@/lib/queries/products'
 
@@ -10,8 +11,20 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   const mainImage = product.images[0]
 
+  const displayPriceKes = product.salePriceKes ?? product.basePriceKes
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-16">
+      <TrackEvent
+        event="ViewContent"
+        params={{
+          content_ids: [product.id],
+          content_name: product.name,
+          content_type: 'product',
+          value: displayPriceKes,
+          currency: 'KES',
+        }}
+      />
       <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
         <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg bg-black/5 dark:bg-white/5">
           {mainImage ? (
@@ -41,9 +54,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </div>
 
           <VariantSelector
+            productId={product.id}
             options={product.options}
             variants={product.variants}
-            basePriceKes={product.salePriceKes ?? product.basePriceKes}
+            basePriceKes={displayPriceKes}
             compareAtPriceKes={product.salePriceKes ? product.basePriceKes : null}
           />
 

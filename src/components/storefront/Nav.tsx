@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
 
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
@@ -26,6 +27,7 @@ export function Nav() {
           <Link href="/cart" className="hover:opacity-70">
             Cart
           </Link>
+          <ThemeToggle />
         </nav>
       </div>
     </header>

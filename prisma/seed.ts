@@ -1,13 +1,9 @@
 import 'dotenv/config'
-import { neonConfig } from '@neondatabase/serverless'
-import { PrismaNeon } from '@prisma/adapter-neon'
+import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-import ws from 'ws'
 
-neonConfig.webSocketConstructor = ws
-
-const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL })
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
 
 const SHIPPING_RATES: Array<{ county: string; rateKes: number }> = [

@@ -2,6 +2,10 @@ import Link from 'next/link'
 import { ProductGrid } from '@/components/storefront/ProductGrid'
 import { getFeaturedProducts } from '@/lib/queries/products'
 
+// Render at request time rather than statically at build time — the build
+// environment doesn't have database access, only the deployed runtime does.
+export const dynamic = 'force-dynamic'
+
 export default async function HomePage() {
   const featuredProducts = await getFeaturedProducts()
 

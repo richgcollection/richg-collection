@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ImageUploader } from '@/components/admin/ImageUploader'
 import { createProductAction, updateProductAction } from '@/lib/actions/admin-products'
 import { slugify } from '@/lib/slug'
 
@@ -50,7 +51,7 @@ export function ProductForm({
   const [name, setName] = useState(initial.name)
   const [slug, setSlug] = useState(initial.slug)
   const [slugTouched, setSlugTouched] = useState(isEditing)
-  const [imageUrls, setImageUrls] = useState<string[]>(initial.imageUrls.length ? initial.imageUrls : [''])
+  const [imageUrls, setImageUrls] = useState<string[]>(initial.imageUrls)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -159,40 +160,8 @@ export function ProductForm({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium tracking-wide uppercase opacity-70">
-          Image URLs
-        </label>
-        <div className="flex flex-col gap-2">
-          {imageUrls.map((url, index) => (
-            <div key={index} className="flex gap-2">
-              <input
-                name="imageUrls"
-                value={url}
-                onChange={(e) => {
-                  const next = [...imageUrls]
-                  next[index] = e.target.value
-                  setImageUrls(next)
-                }}
-                placeholder="https://…"
-                className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-              />
-              <button
-                type="button"
-                onClick={() => setImageUrls(imageUrls.filter((_, i) => i !== index))}
-                className="px-2 text-sm opacity-60 hover:opacity-100"
-              >
-                &times;
-              </button>
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => setImageUrls([...imageUrls, ''])}
-          className="mt-2 text-xs opacity-70 hover:opacity-100"
-        >
-          + Add image URL
-        </button>
+        <label className="mb-2 block text-xs font-medium tracking-wide uppercase opacity-70">Images</label>
+        <ImageUploader urls={imageUrls} onChange={setImageUrls} />
       </div>
 
       <div>

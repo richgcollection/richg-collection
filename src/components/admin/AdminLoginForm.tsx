@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
+import { PasswordInput } from '@/components/ui/PasswordInput'
 import { adminLoginAction } from '@/lib/actions/admin-auth'
 
 export function AdminLoginForm() {
@@ -33,14 +34,7 @@ export function AdminLoginForm() {
         >
           Password
         </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          autoComplete="current-password"
-          className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-        />
+        <PasswordInput id="password" name="password" required autoComplete="current-password" />
       </div>
       <button
         type="submit"

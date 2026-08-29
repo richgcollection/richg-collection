@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BrandStory } from '@/components/storefront/BrandStory'
 import { ProductGrid } from '@/components/storefront/ProductGrid'
 import { getFeaturedProducts } from '@/lib/queries/products'
 
@@ -25,6 +26,8 @@ export default async function HomePage() {
           Shop Now
         </Link>
       </div>
+
+      <BrandStory />
 
       {featuredProducts.length > 0 && (
         <div className="mx-auto max-w-6xl px-6 pb-24">

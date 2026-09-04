@@ -21,19 +21,23 @@ export function ImageUploader({
     setIsUploading(true)
     const uploaded: string[] = []
 
-    for (const file of Array.from(files)) {
-      const formData = new FormData()
-      formData.set('file', file)
-      const result = await uploadProductImageAction(formData)
-      if (result.success) {
-        uploaded.push(result.url)
-      } else {
-        setError(result.error)
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData()
+        formData.set('file', file)
+        const result = await uploadProductImageAction(formData)
+        if (result.success) {
+          uploaded.push(result.url)
+        } else {
+          setError(result.error)
+        }
       }
+      if (uploaded.length > 0) onChange([...urls, ...uploaded])
+    } catch {
+      setError('Upload failed unexpectedly. Please try again.')
+    } finally {
+      setIsUploading(false)
     }
-
-    if (uploaded.length > 0) onChange([...urls, ...uploaded])
-    setIsUploading(false)
   }
 
   function removeAt(index: number) {

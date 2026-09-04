@@ -27,9 +27,14 @@ export async function uploadProductImageAction(formData: FormData): Promise<Uplo
     }
   }
 
-  const blob = await put(`products/${crypto.randomUUID()}-${file.name}`, file, {
-    access: 'public',
-  })
-
-  return { success: true, url: blob.url }
+  try {
+    const blob = await put(`products/${crypto.randomUUID()}-${file.name}`, file, {
+      access: 'public',
+    })
+    return { success: true, url: blob.url }
+  } catch (error) {
+    console.error('Image upload failed:', error)
+    const message = error instanceof Error ? error.message : 'Upload failed.'
+    return { success: false, error: `Upload failed: ${message}` }
+  }
 }

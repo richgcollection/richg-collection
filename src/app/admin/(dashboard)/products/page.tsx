@@ -52,7 +52,10 @@ export default async function AdminProductsPage() {
                     {product.status}
                   </span>
                 </td>
-                <td className="py-3">
+                <td className="py-3 text-right">
+                  <Link href={`/admin/products/${product.id}/edit`} className="mr-4 text-xs opacity-60 hover:opacity-100">
+                    Edit
+                  </Link>
                   <ProductDeleteButton productId={product.id} />
                 </td>
               </tr>

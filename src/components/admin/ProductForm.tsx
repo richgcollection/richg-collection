@@ -54,6 +54,7 @@ export function ProductForm({
   const [imageUrls, setImageUrls] = useState<string[]>(initial.imageUrls)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
 
   function handleNameChange(value: string) {
     setName(value)
@@ -62,12 +63,19 @@ export function ProductForm({
 
   async function handleSubmit(formData: FormData) {
     setError(null)
+    setJustSaved(false)
     setIsSubmitting(true)
     const result = isEditing
       ? await updateProductAction(initial.id!, formData)
       : await createProductAction(formData)
     setIsSubmitting(false)
-    if (result && !result.success) setError(result.error)
+    if (result && !result.success) {
+      setError(result.error)
+    } else if (result?.success) {
+      // Creating redirects away on success, so this only ever fires for edits.
+      setJustSaved(true)
+      setTimeout(() => setJustSaved(false), 3000)
+    }
   }
 
   return (
@@ -243,13 +251,16 @@ export function ProductForm({
         </div>
       </div>
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-fit rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background disabled:opacity-50"
-      >
-        {isSubmitting ? 'Saving…' : isEditing ? 'Save Changes' : 'Create Product'}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-fit rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background disabled:opacity-50"
+        >
+          {isSubmitting ? 'Saving…' : justSaved ? 'Saved ✓' : isEditing ? 'Save Changes' : 'Create Product'}
+        </button>
+        {justSaved && <span className="text-sm text-emerald-600 dark:text-emerald-400">Changes saved.</span>}
+      </div>
     </form>
   )
 }

@@ -14,6 +14,7 @@ export function ImageUploader({
   onChange: (urls: string[]) => void
 }) {
   const [isUploading, setIsUploading] = useState(false)
+  const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -35,10 +36,11 @@ export function ImageUploader({
     const skipped = fileArray.length - toUpload.length
 
     setIsUploading(true)
+    setProgress({ completed: 0, total: toUpload.length })
     const uploaded: string[] = []
 
     try {
-      for (const file of toUpload) {
+      for (const [index, file] of toUpload.entries()) {
         const formData = new FormData()
         formData.set('file', file)
         const result = await uploadProductImageAction(formData)
@@ -47,6 +49,7 @@ export function ImageUploader({
         } else {
           setError(result.error)
         }
+        setProgress({ completed: index + 1, total: toUpload.length })
       }
       if (uploaded.length > 0) {
         onChange([...urls, ...uploaded])
@@ -59,6 +62,7 @@ export function ImageUploader({
       setError('Upload failed unexpectedly. Please try again.')
     } finally {
       setIsUploading(false)
+      setProgress(null)
     }
   }
 
@@ -115,11 +119,20 @@ export function ImageUploader({
           }`}
         >
           <p className="opacity-70">
-            {isUploading ? 'Uploading…' : 'Click or drag images here to upload'}
+            {progress ? `Uploading ${progress.completed} of ${progress.total}…` : 'Click or drag images here to upload'}
           </p>
-          <p className="mt-1 text-xs opacity-50">
-            JPG, PNG, or WebP — up to 4MB each · up to {MAX_IMAGES} images, first is the featured image
-          </p>
+          {progress ? (
+            <div className="mt-2 h-1.5 w-40 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+              <div
+                className="h-full rounded-full bg-foreground transition-all duration-300"
+                style={{ width: `${(progress.completed / progress.total) * 100}%` }}
+              />
+            </div>
+          ) : (
+            <p className="mt-1 text-xs opacity-50">
+              JPG, PNG, or WebP — up to 4MB each · up to {MAX_IMAGES} images, first is the featured image
+            </p>
+          )}
           <input
             ref={fileInputRef}
             type="file"

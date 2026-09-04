@@ -38,11 +38,14 @@ function parseProductForm(formData: FormData) {
   })
 }
 
+const MAX_PRODUCT_IMAGES = 5
+
 function parseImageUrls(formData: FormData): string[] {
   return formData
     .getAll('imageUrls')
     .map((v) => String(v).trim())
     .filter(Boolean)
+    .slice(0, MAX_PRODUCT_IMAGES)
 }
 
 function parseSizes(formData: FormData): string[] {

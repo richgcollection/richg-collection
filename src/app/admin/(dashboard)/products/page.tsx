@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import { ProductDeleteButton } from '@/components/admin/ProductDeleteButton'
 import { prisma } from '@/lib/prisma'
@@ -8,7 +9,10 @@ export const dynamic = 'force-dynamic'
 export default async function AdminProductsPage() {
   const products = await prisma.product.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { variants: { select: { stockQty: true } } },
+    include: {
+      variants: { select: { stockQty: true } },
+      images: { orderBy: { position: 'asc' }, take: 1, select: { url: true, altText: true } },
+    },
   })
 
   return (
@@ -26,6 +30,7 @@ export default async function AdminProductsPage() {
       <table className="mt-6 w-full text-sm">
         <thead>
           <tr className="border-b border-black/10 text-left opacity-60 dark:border-white/10">
+            <th className="py-2" />
             <th className="py-2">Name</th>
             <th className="py-2">Price</th>
             <th className="py-2">Stock</th>
@@ -38,8 +43,26 @@ export default async function AdminProductsPage() {
             const stock = product.variants.length
               ? product.variants.reduce((sum, v) => sum + v.stockQty, 0)
               : product.stockQty
+            const image = product.images[0]
             return (
               <tr key={product.id} className="border-b border-black/5 dark:border-white/5">
+                <td className="py-3">
+                  <div className="relative h-12 w-10 overflow-hidden rounded-md bg-surface">
+                    {image ? (
+                      <Image
+                        src={image.url}
+                        alt={image.altText ?? product.name}
+                        fill
+                        sizes="40px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[9px] opacity-40">
+                        No image
+                      </div>
+                    )}
+                  </div>
+                </td>
                 <td className="py-3">
                   <Link href={`/admin/products/${product.id}/edit`} className="font-medium hover:opacity-70">
                     {product.name}
@@ -63,7 +86,7 @@ export default async function AdminProductsPage() {
           })}
           {products.length === 0 && (
             <tr>
-              <td colSpan={5} className="py-8 text-center opacity-60">
+              <td colSpan={6} className="py-8 text-center opacity-60">
                 No products yet.
               </td>
             </tr>

@@ -27,7 +27,7 @@ export function ImageUploader({
 
     const remainingSlots = MAX_IMAGES - urls.length
     if (remainingSlots <= 0) {
-      setError(`Maximum ${MAX_IMAGES} images per product — remove one to add another.`)
+      setError(`Maximum ${MAX_IMAGES} images per product. Remove one to add another.`)
       return
     }
 
@@ -53,7 +53,7 @@ export function ImageUploader({
       }
       if (uploaded.length > 0) {
         onChange([...urls, ...uploaded])
-        const skippedNote = skipped > 0 ? ` (${skipped} skipped — ${MAX_IMAGES} image limit reached)` : ''
+        const skippedNote = skipped > 0 ? ` (${skipped} skipped, ${MAX_IMAGES} image limit reached)` : ''
         setSuccess(
           `${uploaded.length} image${uploaded.length === 1 ? '' : 's'} uploaded.${skippedNote}`,
         )
@@ -99,7 +99,7 @@ export function ImageUploader({
 
       {atLimit ? (
         <p className="rounded-md border border-dashed border-black/20 px-4 py-3 text-center text-sm opacity-60 dark:border-white/20">
-          Maximum {MAX_IMAGES} images reached — remove one to add another.
+          Maximum {MAX_IMAGES} images reached. Remove one to add another.
         </p>
       ) : (
         <div
@@ -130,7 +130,7 @@ export function ImageUploader({
             </div>
           ) : (
             <p className="mt-1 text-xs opacity-50">
-              JPG, PNG, or WebP — up to 4MB each · up to {MAX_IMAGES} images, first is the featured image
+              JPG, PNG, or WebP, up to 4MB each · up to {MAX_IMAGES} images, first is the featured image
             </p>
           )}
           <input

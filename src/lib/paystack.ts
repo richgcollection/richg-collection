@@ -33,7 +33,7 @@ export async function isPaystackConfigured(): Promise<boolean> {
 
 export class PaystackNotConfiguredError extends Error {
   constructor() {
-    super('Paystack is not configured yet — set it up in Admin → Payment Settings.')
+    super('Paystack is not configured yet. Set it up in Admin > Payment Settings.')
     this.name = 'PaystackNotConfiguredError'
   }
 }

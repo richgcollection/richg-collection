@@ -176,7 +176,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
 
   const orderItemCount = await prisma.orderItem.count({ where: { productId } })
   if (orderItemCount > 0) {
-    return { success: false, error: 'Cannot delete — this product has existing orders.' }
+    return { success: false, error: 'Cannot delete: this product has existing orders.' }
   }
 
   await prisma.$transaction(async (tx) => {
@@ -216,7 +216,7 @@ export async function removeVariantAction(variantId: string): Promise<ActionResu
 
   const orderItemCount = await prisma.orderItem.count({ where: { variantId } })
   if (orderItemCount > 0) {
-    return { success: false, error: 'Cannot remove — this option is part of an existing order.' }
+    return { success: false, error: 'Cannot remove: this option is part of an existing order.' }
   }
 
   await prisma.$transaction(async (tx) => {

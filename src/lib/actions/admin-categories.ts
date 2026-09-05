@@ -40,7 +40,7 @@ export async function deleteCategoryAction(categoryId: string): Promise<ActionRe
   if (productCount > 0) {
     return {
       success: false,
-      error: `Cannot delete — ${productCount} product(s) still use this category.`,
+      error: `Cannot delete: ${productCount} product(s) still use this category.`,
     }
   }
 

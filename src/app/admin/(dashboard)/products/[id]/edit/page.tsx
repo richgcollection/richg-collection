@@ -26,7 +26,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
 
   const variantRows = product.variants.map((variant) => ({
     id: variant.id,
-    sizeLabel: variant.optionValues.map((ov) => ov.optionValue.value).join(' / ') || '—',
+    sizeLabel: variant.optionValues.map((ov) => ov.optionValue.value).join(' / ') || 'No options',
     stockQty: variant.stockQty,
     priceKes: variant.priceKes,
   }))

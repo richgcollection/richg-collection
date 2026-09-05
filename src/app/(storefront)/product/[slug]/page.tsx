@@ -1,6 +1,6 @@
-import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import { TrackEvent } from '@/components/analytics/TrackEvent'
+import { ProductGallery } from '@/components/storefront/ProductGallery'
 import { VariantSelector } from '@/components/storefront/VariantSelector'
 import { getProductBySlug } from '@/lib/queries/products'
 
@@ -8,8 +8,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params
   const product = await getProductBySlug(slug)
   if (!product) notFound()
-
-  const mainImage = product.images[0]
 
   const displayPriceKes = product.salePriceKes ?? product.basePriceKes
 
@@ -26,22 +24,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         }}
       />
       <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
-        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg bg-black/5 dark:bg-white/5">
-          {mainImage ? (
-            <Image
-              src={mainImage.url}
-              alt={mainImage.altText ?? product.name}
-              fill
-              sizes="(min-width: 768px) 50vw, 100vw"
-              className="object-cover"
-              priority
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs uppercase opacity-40">
-              No image
-            </div>
-          )}
-        </div>
+        <ProductGallery images={product.images} productName={product.name} />
 
         <div className="flex flex-col gap-6">
           <div>

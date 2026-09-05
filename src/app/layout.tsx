@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Rich G Collection",
-  description: "Rich G Collection — sustainable, durable, authentic menswear at a bargain.",
+  description: "Rich G Collection: sustainable, durable, authentic menswear at a bargain.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

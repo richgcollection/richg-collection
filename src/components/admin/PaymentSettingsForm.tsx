@@ -58,7 +58,7 @@ export function PaymentSettingsForm({
 
       <div>
         <label htmlFor="secretKey" className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
-          Secret Key {hasSecretKey && <span className="normal-case opacity-60">(already set — leave blank to keep it)</span>}
+          Secret Key {hasSecretKey && <span className="normal-case opacity-60">(already set, leave blank to keep it)</span>}
         </label>
         <PasswordInput
           id="secretKey"

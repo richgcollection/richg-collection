@@ -40,7 +40,7 @@ export function CartEmailCapture({ initialEmail }: { initialEmail: string | null
       />
       <p className="mt-1 text-xs opacity-60">
         {status === 'saved'
-          ? "Saved — we'll email you if you don't finish checking out."
+          ? "Saved. We'll email you if you don't finish checking out."
           : "We'll only use this to follow up if you don't finish checking out."}
       </p>
       {status === 'error' && <p className="mt-1 text-xs text-red-600 dark:text-red-400">Enter a valid email address.</p>}

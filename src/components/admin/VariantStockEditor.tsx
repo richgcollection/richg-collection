@@ -90,7 +90,7 @@ export function VariantStockEditor({ productId, variants }: { productId: string;
                     min={0}
                     value={row.priceKes ?? ''}
                     disabled={isPending}
-                    placeholder="—"
+                    placeholder="Default"
                     onChange={(e) =>
                       setRows((prev) =>
                         prev.map((r) =>
@@ -119,7 +119,7 @@ export function VariantStockEditor({ productId, variants }: { productId: string;
           </tbody>
         </table>
       ) : (
-        <p className="text-sm opacity-60">No size variants yet — this product uses the plain stock quantity above.</p>
+        <p className="text-sm opacity-60">No size variants yet. This product uses the plain stock quantity above.</p>
       )}
 
       <div className="mt-4 flex items-end gap-3">

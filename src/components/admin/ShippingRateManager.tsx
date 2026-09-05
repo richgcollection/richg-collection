@@ -95,7 +95,7 @@ export function ShippingRateManager({ rates }: { rates: ShippingRate[] }) {
       {rowError && <p className="text-sm text-red-600 dark:text-red-400">{rowError}</p>}
       <p className="-mt-4 text-xs opacity-60">
         &quot;DEFAULT&quot; is the fallback rate used for any town not listed below. Click a rate to edit it
-        directly — it saves when you click away.
+        directly, it saves when you click away.
       </p>
 
       <input

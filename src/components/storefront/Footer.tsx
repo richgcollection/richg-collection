@@ -10,7 +10,7 @@ export async function Footer() {
         <div className="col-span-2 flex flex-col gap-3 sm:col-span-1">
           <span className="text-base font-semibold tracking-wide uppercase">Rich G Collection</span>
           <p className="max-w-xs opacity-70">
-            The modern classic man&apos;s wardrobe — sustainable, durable, and built for a man who takes
+            The modern classic man&apos;s wardrobe, sustainable, durable, and built for a man who takes
             care of himself.
           </p>
         </div>

@@ -18,7 +18,7 @@ export async function uploadProductImageAction(formData: FormData): Promise<Uplo
     return { success: false, error: 'Only image files are allowed.' }
   }
   if (file.size > MAX_FILE_SIZE_BYTES) {
-    return { success: false, error: 'Image is too large — please use a file under 4MB.' }
+    return { success: false, error: 'Image is too large. Please use a file under 4MB.' }
   }
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return {

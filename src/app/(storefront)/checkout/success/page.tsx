@@ -53,7 +53,7 @@ export default async function CheckoutSuccessPage({
           <h1 className="text-3xl font-semibold tracking-tight">Order received</h1>
           <p className="mt-4 opacity-70">
             Order <strong>{order.orderNumber}</strong> has been saved. Online payment is still being set
-            up — we&apos;ll contact you shortly to arrange payment.
+            up, we&apos;ll contact you shortly to arrange payment.
           </p>
         </>
       ) : params.payment === 'error' ? (
@@ -69,7 +69,7 @@ export default async function CheckoutSuccessPage({
           <h1 className="text-3xl font-semibold tracking-tight">Processing your payment</h1>
           <p className="mt-4 opacity-70">
             Order <strong>{order.orderNumber}</strong> is being confirmed. This page will update
-            automatically once payment clears — you&apos;ll also get an email confirmation.
+            automatically once payment clears, you&apos;ll also get an email confirmation.
           </p>
         </>
       )}

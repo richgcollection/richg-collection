@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { CartEmailCapture } from '@/components/storefront/CartEmailCapture'
 import { CartLineItem } from '@/components/storefront/CartLineItem'
 import { getCart } from '@/lib/cart'
 import { formatKes } from '@/lib/money'
@@ -38,6 +39,8 @@ export default async function CartPage() {
         <span className="text-lg font-medium">{formatKes(cart.subtotalKes)}</span>
       </div>
       <p className="mt-1 text-sm opacity-60">Shipping calculated at checkout.</p>
+
+      <CartEmailCapture initialEmail={cart.email} />
 
       <Link
         href="/checkout"

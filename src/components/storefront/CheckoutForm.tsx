@@ -3,7 +3,7 @@
 import { useActionState } from 'react'
 import { placeOrderAction } from '@/lib/actions/checkout'
 
-export function CheckoutForm({ towns }: { towns: string[] }) {
+export function CheckoutForm({ towns, prefillEmail }: { towns: string[]; prefillEmail?: string | null }) {
   const [state, formAction, isPending] = useActionState(placeOrderAction, undefined)
 
   return (
@@ -19,7 +19,7 @@ export function CheckoutForm({ towns }: { towns: string[] }) {
         <Field label="Phone" name="phone" type="tel" autoComplete="tel" required />
       </div>
 
-      <Field label="Email" name="email" type="email" autoComplete="email" required />
+      <Field label="Email" name="email" type="email" autoComplete="email" required defaultValue={prefillEmail ?? ''} />
 
       <div>
         <p className="mb-1 text-xs font-medium tracking-wide uppercase opacity-70">Delivery Address</p>
@@ -69,6 +69,7 @@ function Field({
   autoComplete,
   required,
   minLength,
+  defaultValue,
 }: {
   label: string
   name: string
@@ -76,6 +77,7 @@ function Field({
   autoComplete?: string
   required?: boolean
   minLength?: number
+  defaultValue?: string
 }) {
   return (
     <div>
@@ -89,6 +91,7 @@ function Field({
         autoComplete={autoComplete}
         required={required}
         minLength={minLength}
+        defaultValue={defaultValue}
         className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
       />
     </div>

@@ -58,7 +58,9 @@ function effectiveUnitPriceKes(item: {
 
 export async function getCart() {
   const cartId = await getCurrentCartId()
-  if (!cartId) return { id: null, items: [], subtotalKes: 0 }
+  if (!cartId) return { id: null, items: [], subtotalKes: 0, email: null }
+
+  const cartRecord = await prisma.cart.findUnique({ where: { id: cartId }, select: { email: true } })
 
   const items = await prisma.cartItem.findMany({
     where: { cartId },
@@ -106,7 +108,7 @@ export async function getCart() {
 
   const subtotalKes = lineItems.reduce((sum, item) => sum + item.lineTotalKes, 0)
 
-  return { id: cartId, items: lineItems, subtotalKes }
+  return { id: cartId, items: lineItems, subtotalKes, email: cartRecord?.email ?? null }
 }
 
 export type Cart = Awaited<ReturnType<typeof getCart>>

@@ -187,6 +187,7 @@ model Cart {
   userId    String?    @unique
   user      User?      @relation(fields: [userId], references: [id])
   sessionId String?    @unique
+  email     String?
   items     CartItem[]
   updatedAt DateTime   @updatedAt
 }

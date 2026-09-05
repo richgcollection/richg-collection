@@ -75,3 +75,16 @@ export async function removeCartItemAction(itemId: string): Promise<ActionResult
   revalidatePath('/cart')
   return { success: true }
 }
+
+export async function saveCartEmailAction(email: string): Promise<ActionResult> {
+  const parsed = z.email().safeParse(email)
+  if (!parsed.success) {
+    return { success: false, error: 'Enter a valid email address.' }
+  }
+
+  const cartId = await getCurrentCartId()
+  if (!cartId) return { success: false, error: 'Cart not found.' }
+
+  await prisma.cart.update({ where: { id: cartId }, data: { email: parsed.data } })
+  return { success: true }
+}

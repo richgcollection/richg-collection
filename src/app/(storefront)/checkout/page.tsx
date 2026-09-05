@@ -29,7 +29,7 @@ export default async function CheckoutPage() {
       <h1 className="text-3xl font-semibold tracking-tight">Checkout</h1>
 
       <div className="mt-8 grid grid-cols-1 gap-10 md:grid-cols-[1fr_320px]">
-        <CheckoutForm towns={towns} />
+        <CheckoutForm towns={towns} prefillEmail={cart.email} />
 
         <div className="rounded-lg border border-black/10 p-6 dark:border-white/10">
           <h2 className="mb-4 text-sm font-medium tracking-wide uppercase opacity-70">Order Summary</h2>

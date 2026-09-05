@@ -3,7 +3,7 @@ import { TrackEvent } from '@/components/analytics/TrackEvent'
 import { CheckoutForm } from '@/components/storefront/CheckoutForm'
 import { getCart } from '@/lib/cart'
 import { formatKes } from '@/lib/money'
-import { getCounties } from '@/lib/shipping'
+import { getTowns } from '@/lib/shipping'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +13,7 @@ export default async function CheckoutPage() {
     redirect('/cart')
   }
 
-  const counties = await getCounties()
+  const towns = await getTowns()
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-16">
@@ -29,7 +29,7 @@ export default async function CheckoutPage() {
       <h1 className="text-3xl font-semibold tracking-tight">Checkout</h1>
 
       <div className="mt-8 grid grid-cols-1 gap-10 md:grid-cols-[1fr_320px]">
-        <CheckoutForm counties={counties} />
+        <CheckoutForm towns={towns} />
 
         <div className="rounded-lg border border-black/10 p-6 dark:border-white/10">
           <h2 className="mb-4 text-sm font-medium tracking-wide uppercase opacity-70">Order Summary</h2>
@@ -48,7 +48,7 @@ export default async function CheckoutPage() {
             <span>Subtotal</span>
             <span>{formatKes(cart.subtotalKes)}</span>
           </div>
-          <p className="mt-1 text-xs opacity-60">Shipping is calculated from your county after you submit.</p>
+          <p className="mt-1 text-xs opacity-60">Shipping is calculated from your delivery town after you submit.</p>
         </div>
       </div>
     </div>

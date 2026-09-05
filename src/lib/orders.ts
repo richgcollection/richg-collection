@@ -13,8 +13,7 @@ export type ShippingAddressInput = {
   email: string
   line1: string
   line2?: string
-  city: string
-  county: string
+  town: string
   postalCode?: string
 }
 

@@ -8,12 +8,14 @@ export function PasswordInput({
   autoComplete,
   required,
   className,
+  placeholder,
 }: {
   id?: string
   name: string
   autoComplete?: string
   required?: boolean
   className?: string
+  placeholder?: string
 }) {
   const [visible, setVisible] = useState(false)
   const generatedId = useId()
@@ -27,6 +29,7 @@ export function PasswordInput({
         type={visible ? 'text' : 'password'}
         autoComplete={autoComplete}
         required={required}
+        placeholder={placeholder}
         className={className ?? 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 pr-10 text-sm dark:border-white/10'}
       />
       <button

@@ -21,7 +21,7 @@ export default async function CheckoutSuccessPage({
   // The redirect back from Paystack can arrive before the webhook does —
   // verify directly here so the customer sees an immediate confirmation
   // instead of "processing" if the payment already succeeded.
-  if (order.paymentStatus !== 'PAID' && (params.reference || params.trxref) && isPaystackConfigured()) {
+  if (order.paymentStatus !== 'PAID' && (params.reference || params.trxref) && (await isPaystackConfigured())) {
     try {
       const verification = await verifyTransaction(orderNumber)
       if (verification.data.status === 'success') {

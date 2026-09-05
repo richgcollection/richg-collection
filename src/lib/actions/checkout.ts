@@ -6,7 +6,7 @@ import { getCart, getCurrentCartId } from '@/lib/cart'
 import { createPendingOrder } from '@/lib/orders'
 import { initializeTransaction, isPaystackConfigured } from '@/lib/paystack'
 import { prisma } from '@/lib/prisma'
-import { getShippingRateForCounty } from '@/lib/shipping'
+import { getShippingRateForTown } from '@/lib/shipping'
 
 const shippingAddressSchema = z.object({
   fullName: z.string().min(2, 'Enter your full name.'),
@@ -14,8 +14,7 @@ const shippingAddressSchema = z.object({
   email: z.email('Enter a valid email address.'),
   line1: z.string().min(3, 'Enter your delivery address.'),
   line2: z.string().optional(),
-  city: z.string().min(2, 'Enter your town/city.'),
-  county: z.string().min(2, 'Select your county.'),
+  town: z.string().min(2, 'Select your delivery town.'),
   postalCode: z.string().optional(),
 })
 
@@ -31,8 +30,7 @@ export async function placeOrderAction(
     email: formData.get('email'),
     line1: formData.get('line1'),
     line2: formData.get('line2') || undefined,
-    city: formData.get('city'),
-    county: formData.get('county'),
+    town: formData.get('town'),
     postalCode: formData.get('postalCode') || undefined,
   })
 
@@ -45,7 +43,7 @@ export async function placeOrderAction(
     return { error: 'Your cart is empty.' }
   }
 
-  const shippingKes = await getShippingRateForCounty(parsed.data.county)
+  const shippingKes = await getShippingRateForTown(parsed.data.town)
   const order = await createPendingOrder(cart, parsed.data, shippingKes)
 
   const cartId = await getCurrentCartId()
@@ -53,7 +51,7 @@ export async function placeOrderAction(
     await prisma.cartItem.deleteMany({ where: { cartId } })
   }
 
-  if (!isPaystackConfigured()) {
+  if (!(await isPaystackConfigured())) {
     redirect(`/checkout/success?order=${order.orderNumber}&payment=pending-setup`)
   }
 

@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma'
 import type { ActionResult } from '@/lib/actions/cart'
 
 const shippingRateSchema = z.object({
-  county: z.string().min(2, 'County is required.'),
+  town: z.string().min(2, 'Town is required.'),
   rateKes: z.coerce.number().int().min(0, 'Rate must be zero or more.'),
 })
 
@@ -18,7 +18,7 @@ export async function upsertShippingRateAction(
   await requireAdmin()
 
   const parsed = shippingRateSchema.safeParse({
-    county: formData.get('county'),
+    town: formData.get('town'),
     rateKes: formData.get('rateKes'),
   })
   if (!parsed.success) {
@@ -26,7 +26,7 @@ export async function upsertShippingRateAction(
   }
 
   await prisma.shippingRate.upsert({
-    where: { county: parsed.data.county },
+    where: { town: parsed.data.town },
     update: { rateKes: parsed.data.rateKes },
     create: parsed.data,
   })
@@ -35,14 +35,27 @@ export async function upsertShippingRateAction(
   return { success: true }
 }
 
-export async function deleteShippingRateAction(county: string): Promise<ActionResult> {
+/** Quick inline edit of an existing rate's amount (no town-name change). */
+export async function updateShippingRateAmountAction(town: string, rateKes: number): Promise<ActionResult> {
   await requireAdmin()
 
-  if (county === 'DEFAULT') {
+  if (!Number.isInteger(rateKes) || rateKes < 0) {
+    return { success: false, error: 'Rate must be zero or more.' }
+  }
+
+  await prisma.shippingRate.update({ where: { town }, data: { rateKes } })
+  revalidatePath('/admin/shipping-rates')
+  return { success: true }
+}
+
+export async function deleteShippingRateAction(town: string): Promise<ActionResult> {
+  await requireAdmin()
+
+  if (town === 'DEFAULT') {
     return { success: false, error: 'The DEFAULT rate cannot be deleted.' }
   }
 
-  await prisma.shippingRate.delete({ where: { county } })
+  await prisma.shippingRate.delete({ where: { town } })
   revalidatePath('/admin/shipping-rates')
   return { success: true }
 }

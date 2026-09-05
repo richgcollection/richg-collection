@@ -5,8 +5,8 @@ export const dynamic = 'force-dynamic'
 
 export default async function AdminShippingRatesPage() {
   const rates = await prisma.shippingRate.findMany({
-    orderBy: { county: 'asc' },
-    select: { county: true, rateKes: true },
+    orderBy: { town: 'asc' },
+    select: { town: true, rateKes: true },
   })
 
   return (

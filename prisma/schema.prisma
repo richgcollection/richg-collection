@@ -53,7 +53,7 @@ model Address {
   line1      String
   line2      String?
   city       String
-  county     String?
+  town       String?
   postalCode String?
   country    String   @default("KE")
   isDefault  Boolean  @default(false)
@@ -63,8 +63,17 @@ model Address {
 
 model ShippingRate {
   id        String   @id @default(cuid())
-  county    String   @unique
+  town      String   @unique
   rateKes   Int
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentSettings {
+  id        String   @id @default(cuid())
+  provider  String   @unique
+  enabled   Boolean  @default(false)
+  publicKey String?
+  secretKey String?
   updatedAt DateTime @updatedAt
 }
 

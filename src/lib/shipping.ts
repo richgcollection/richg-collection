@@ -1,18 +1,18 @@
 import { prisma } from '@/lib/prisma'
 
-export async function getShippingRateForCounty(county: string): Promise<number> {
-  const rate = await prisma.shippingRate.findUnique({ where: { county } })
+export async function getShippingRateForTown(town: string): Promise<number> {
+  const rate = await prisma.shippingRate.findUnique({ where: { town } })
   if (rate) return rate.rateKes
 
-  const fallback = await prisma.shippingRate.findUnique({ where: { county: 'DEFAULT' } })
+  const fallback = await prisma.shippingRate.findUnique({ where: { town: 'DEFAULT' } })
   return fallback?.rateKes ?? 0
 }
 
-export async function getCounties(): Promise<string[]> {
+export async function getTowns(): Promise<string[]> {
   const rates = await prisma.shippingRate.findMany({
-    where: { county: { not: 'DEFAULT' } },
-    orderBy: { county: 'asc' },
-    select: { county: true },
+    where: { town: { not: 'DEFAULT' } },
+    orderBy: { town: 'asc' },
+    select: { town: true },
   })
-  return rates.map((r) => r.county)
+  return rates.map((r) => r.town)
 }

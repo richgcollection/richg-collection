@@ -1,22 +1,47 @@
 import { createHmac } from 'node:crypto'
+import { prisma } from '@/lib/prisma'
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co'
 
-export function isPaystackConfigured(): boolean {
-  return Boolean(process.env.PAYSTACK_SECRET_KEY)
+type PaystackCredentials = { secretKey: string; publicKey: string | null }
+
+/**
+ * Credentials can be configured two ways: via the admin dashboard's Payment
+ * Settings page (stored in the database) or via PAYSTACK_SECRET_KEY /
+ * PAYSTACK_PUBLIC_KEY environment variables. The database takes priority
+ * when present and enabled, so the dashboard always wins once someone sets
+ * it up there — env vars just mean it works without touching the dashboard
+ * first.
+ */
+async function resolvePaystackCredentials(): Promise<PaystackCredentials | null> {
+  const settings = await prisma.paymentSettings.findUnique({ where: { provider: 'paystack' } })
+  if (settings?.enabled && settings.secretKey) {
+    return { secretKey: settings.secretKey, publicKey: settings.publicKey }
+  }
+
+  const envSecret = process.env.PAYSTACK_SECRET_KEY
+  if (envSecret) {
+    return { secretKey: envSecret, publicKey: process.env.PAYSTACK_PUBLIC_KEY ?? null }
+  }
+
+  return null
+}
+
+export async function isPaystackConfigured(): Promise<boolean> {
+  return (await resolvePaystackCredentials()) !== null
 }
 
 export class PaystackNotConfiguredError extends Error {
   constructor() {
-    super('Paystack is not configured (PAYSTACK_SECRET_KEY is missing).')
+    super('Paystack is not configured yet — set it up in Admin → Payment Settings.')
     this.name = 'PaystackNotConfiguredError'
   }
 }
 
-function getSecretKey(): string {
-  const key = process.env.PAYSTACK_SECRET_KEY
-  if (!key) throw new PaystackNotConfiguredError()
-  return key
+async function getCredentials(): Promise<PaystackCredentials> {
+  const credentials = await resolvePaystackCredentials()
+  if (!credentials) throw new PaystackNotConfiguredError()
+  return credentials
 }
 
 type InitializeTransactionInput = {
@@ -43,7 +68,7 @@ type InitializeTransactionResponse = {
 export async function initializeTransaction(
   input: InitializeTransactionInput,
 ): Promise<InitializeTransactionResponse> {
-  const secretKey = getSecretKey()
+  const { secretKey } = await getCredentials()
 
   const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
     method: 'POST',
@@ -57,6 +82,7 @@ export async function initializeTransaction(
       currency: 'KES',
       reference: input.reference,
       callback_url: input.callbackUrl,
+      // 'mobile_money' is Paystack's channel for Lipa na M-Pesa in Kenya.
       channels: ['card', 'mobile_money'],
       metadata: input.metadata,
     }),
@@ -81,7 +107,7 @@ type VerifyTransactionResponse = {
 }
 
 export async function verifyTransaction(reference: string): Promise<VerifyTransactionResponse> {
-  const secretKey = getSecretKey()
+  const { secretKey } = await getCredentials()
 
   const response = await fetch(
     `${PAYSTACK_BASE_URL}/transaction/verify/${encodeURIComponent(reference)}`,
@@ -95,11 +121,12 @@ export async function verifyTransaction(reference: string): Promise<VerifyTransa
   return json
 }
 
-export function verifyWebhookSignature(rawBody: string, signature: string | null): boolean {
+export async function verifyWebhookSignature(rawBody: string, signature: string | null): Promise<boolean> {
   if (!signature) return false
-  const secretKey = process.env.PAYSTACK_SECRET_KEY
-  if (!secretKey) return false
 
-  const hash = createHmac('sha512', secretKey).update(rawBody).digest('hex')
+  const credentials = await resolvePaystackCredentials()
+  if (!credentials) return false
+
+  const hash = createHmac('sha512', credentials.secretKey).update(rawBody).digest('hex')
   return hash === signature
 }

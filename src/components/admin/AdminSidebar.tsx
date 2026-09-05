@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: '/admin/categories', label: 'Categories' },
   { href: '/admin/orders', label: 'Orders' },
   { href: '/admin/shipping-rates', label: 'Shipping Rates' },
+  { href: '/admin/payment-settings', label: 'Payment Settings' },
 ]
 
 export function AdminSidebar() {

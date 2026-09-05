@@ -6,15 +6,6 @@ import bcrypt from 'bcryptjs'
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
 
-const SHIPPING_RATES: Array<{ county: string; rateKes: number }> = [
-  { county: 'DEFAULT', rateKes: 500 },
-  { county: 'Nairobi', rateKes: 250 },
-  { county: 'Kiambu', rateKes: 300 },
-  { county: 'Mombasa', rateKes: 450 },
-  { county: 'Kisumu', rateKes: 450 },
-  { county: 'Nakuru', rateKes: 400 },
-]
-
 async function seedAdmin() {
   const email = process.env.SEED_ADMIN_EMAIL
   const password = process.env.SEED_ADMIN_PASSWORD
@@ -38,17 +29,6 @@ async function seedAdmin() {
   })
 
   console.log(`Seeded admin user: ${email}`)
-}
-
-async function seedShippingRates() {
-  for (const rate of SHIPPING_RATES) {
-    await prisma.shippingRate.upsert({
-      where: { county: rate.county },
-      update: { rateKes: rate.rateKes },
-      create: rate,
-    })
-  }
-  console.log(`Seeded ${SHIPPING_RATES.length} shipping rates.`)
 }
 
 async function seedCatalog() {
@@ -177,7 +157,8 @@ async function seedCatalog() {
 
 async function main() {
   await seedAdmin()
-  await seedShippingRates()
+  // Shipping rates are seeded separately — see `npm run seed:towns`, which
+  // covers all major towns rather than a handful of hardcoded ones.
   await seedCatalog()
 }
 

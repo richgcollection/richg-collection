@@ -60,10 +60,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               {shippingAddress.line1}
               {shippingAddress.line2 ? `, ${shippingAddress.line2}` : ''}
             </p>
-            <p>
-              {shippingAddress.town}
-              {shippingAddress.postalCode ? ` ${shippingAddress.postalCode}` : ''}
-            </p>
+            <p>{shippingAddress.town}</p>
           </div>
         </div>
 

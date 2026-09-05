@@ -13,7 +13,7 @@ import { PrismaClient } from '@prisma/client'
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
 
-const DEFAULT_RATE_KES = 500
+const DEFAULT_RATE_KES = 300
 
 // Major towns per county — not exhaustive (every trading centre in Kenya
 // would be thousands of entries), but covers real delivery destinations.

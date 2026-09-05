@@ -24,34 +24,31 @@ export function CheckoutForm({ towns }: { towns: string[] }) {
       <div>
         <p className="mb-1 text-xs font-medium tracking-wide uppercase opacity-70">Delivery Address</p>
         <div className="flex flex-col gap-4">
-          <Field label="Street Address" name="line1" autoComplete="address-line1" required />
+          <Field label="Street Address" name="line1" autoComplete="address-line1" required minLength={3} />
           <Field label="Apartment, suite, etc. (optional)" name="line2" autoComplete="address-line2" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
-            Delivery Town
-          </label>
-          <select
-            name="town"
-            required
-            defaultValue=""
-            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-          >
-            <option value="" disabled>
-              Select delivery town
+      <div>
+        <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
+          Delivery Town
+        </label>
+        <select
+          name="town"
+          required
+          defaultValue=""
+          className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+        >
+          <option value="" disabled>
+            Select delivery town
+          </option>
+          {towns.map((town) => (
+            <option key={town} value={town}>
+              {town}
             </option>
-            {towns.map((town) => (
-              <option key={town} value={town}>
-                {town}
-              </option>
-            ))}
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <Field label="Postal Code (optional)" name="postalCode" autoComplete="postal-code" />
+          ))}
+          <option value="Other">Other</option>
+        </select>
       </div>
 
       <button
@@ -71,12 +68,14 @@ function Field({
   type = 'text',
   autoComplete,
   required,
+  minLength,
 }: {
   label: string
   name: string
   type?: string
   autoComplete?: string
   required?: boolean
+  minLength?: number
 }) {
   return (
     <div>
@@ -89,6 +88,7 @@ function Field({
         type={type}
         autoComplete={autoComplete}
         required={required}
+        minLength={minLength}
         className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
       />
     </div>

@@ -118,6 +118,41 @@ export async function getCategories() {
   })
 }
 
+export type CategoryListItem = {
+  id: string
+  name: string
+  slug: string
+  productCount: number
+  imageUrl: string | null
+}
+
+export async function getCategoriesWithPreview(): Promise<CategoryListItem[]> {
+  const categories = await prisma.category.findMany({
+    where: { parentId: { not: null } },
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      products: {
+        where: { product: { status: 'published' } },
+        orderBy: { product: { createdAt: 'desc' } },
+        take: 1,
+        select: { product: { select: { images: { orderBy: { position: 'asc' }, take: 1, select: { url: true } } } } },
+      },
+      _count: { select: { products: { where: { product: { status: 'published' } } } } },
+    },
+  })
+
+  return categories.map((category) => ({
+    id: category.id,
+    name: category.name,
+    slug: category.slug,
+    productCount: category._count.products,
+    imageUrl: category.products[0]?.product.images[0]?.url ?? null,
+  }))
+}
+
 export type ProductDetail = Awaited<ReturnType<typeof getProductBySlug>>
 
 export async function getProductBySlug(slug: string) {

@@ -19,6 +19,7 @@ export type ProductListParams = {
   sort?: ProductSort
   minPrice?: number
   maxPrice?: number
+  limit?: number
 }
 
 function toListItem(product: {
@@ -107,6 +108,7 @@ export async function getProducts(params: ProductListParams = {}): Promise<Produ
     where,
     select: LIST_SELECT,
     orderBy,
+    take: params.limit,
   })
 
   return products.map(toListItem)

@@ -32,17 +32,27 @@ async function seedAdmin() {
 }
 
 async function seedCatalog() {
-  const men = await prisma.category.upsert({
-    where: { slug: 'men' },
-    update: {},
-    create: { name: 'Men', slug: 'men' },
-  })
+  const topLevel: Array<{ name: string; slug: string }> = [
+    { name: 'Shirts', slug: 'shirts' },
+    { name: 'T-Shirts', slug: 't-shirts' },
+    { name: 'Trousers', slug: 'trousers' },
+    { name: 'Active Wear', slug: 'active-wear' },
+  ]
 
-  const categorySlugs: Array<{ name: string; slug: string }> = [
-    { name: 'Official Shirts', slug: 'official-shirts' },
-    { name: 'Casual Shirts', slug: 'casual-shirts' },
-    { name: 'Collarless Shirts', slug: 'collarless-shirts' },
-    { name: 'Short Sleeve T-Shirts', slug: 'short-sleeve-t-shirts' },
+  const topLevelCategories: Record<string, { id: string }> = {}
+  for (const t of topLevel) {
+    topLevelCategories[t.slug] = await prisma.category.upsert({
+      where: { slug: t.slug },
+      update: {},
+      create: { name: t.name, slug: t.slug },
+    })
+  }
+
+  const categorySlugs: Array<{ name: string; slug: string; parentSlug: string }> = [
+    { name: 'Official Shirts', slug: 'official-shirts', parentSlug: 'shirts' },
+    { name: 'Casual Shirts', slug: 'casual-shirts', parentSlug: 'shirts' },
+    { name: 'Collarless Shirts', slug: 'collarless-shirts', parentSlug: 'shirts' },
+    { name: 'Short Sleeve T-Shirts', slug: 'short-sleeve-t-shirts', parentSlug: 't-shirts' },
   ]
 
   const categories: Record<string, { id: string }> = {}
@@ -50,7 +60,7 @@ async function seedCatalog() {
     categories[c.slug] = await prisma.category.upsert({
       where: { slug: c.slug },
       update: {},
-      create: { name: c.name, slug: c.slug, parentId: men.id },
+      create: { name: c.name, slug: c.slug, parentId: topLevelCategories[c.parentSlug].id },
     })
   }
 

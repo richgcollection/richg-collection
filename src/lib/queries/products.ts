@@ -76,7 +76,9 @@ export async function getProducts(params: ProductListParams = {}): Promise<Produ
   const where: Prisma.ProductWhereInput = { status: 'published' }
 
   if (params.categorySlug) {
-    where.categories = { some: { category: { slug: params.categorySlug } } }
+    where.categories = {
+      some: { category: { OR: [{ slug: params.categorySlug }, { parent: { slug: params.categorySlug } }] } },
+    }
   }
 
   if (params.size) {
@@ -126,31 +128,38 @@ export type CategoryListItem = {
   imageUrl: string | null
 }
 
-export async function getCategoriesWithPreview(): Promise<CategoryListItem[]> {
-  const categories = await prisma.category.findMany({
-    where: { parentId: { not: null } },
+export async function getCollectionCategories(): Promise<CategoryListItem[]> {
+  const topLevel = await prisma.category.findMany({
+    where: { parentId: null },
     orderBy: { name: 'asc' },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      products: {
-        where: { product: { status: 'published' } },
-        orderBy: { product: { createdAt: 'desc' } },
-        take: 1,
-        select: { product: { select: { images: { orderBy: { position: 'asc' }, take: 1, select: { url: true } } } } },
-      },
-      _count: { select: { products: { where: { product: { status: 'published' } } } } },
-    },
+    select: { id: true, name: true, slug: true },
   })
 
-  return categories.map((category) => ({
-    id: category.id,
-    name: category.name,
-    slug: category.slug,
-    productCount: category._count.products,
-    imageUrl: category.products[0]?.product.images[0]?.url ?? null,
-  }))
+  return Promise.all(
+    topLevel.map(async (category) => {
+      const where: Prisma.ProductWhereInput = {
+        status: 'published',
+        categories: { some: { category: { OR: [{ id: category.id }, { parentId: category.id }] } } },
+      }
+
+      const [productCount, product] = await Promise.all([
+        prisma.product.count({ where }),
+        prisma.product.findFirst({
+          where,
+          orderBy: { createdAt: 'desc' },
+          select: { images: { orderBy: { position: 'asc' }, take: 1, select: { url: true } } },
+        }),
+      ])
+
+      return {
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+        productCount,
+        imageUrl: product?.images[0]?.url ?? null,
+      }
+    }),
+  )
 }
 
 export type ProductDetail = Awaited<ReturnType<typeof getProductBySlug>>

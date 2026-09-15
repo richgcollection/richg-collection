@@ -30,10 +30,10 @@ export function Hero() {
 
       <div className="relative mx-auto w-full max-w-6xl px-6">
         <div className="flex max-w-[92%] flex-col items-start gap-2 sm:max-w-sm sm:gap-6">
-          <h1 className="text-lg font-semibold tracking-tight text-white sm:text-4xl md:text-5xl">
+          <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl md:text-5xl">
             Rich G Collection
           </h1>
-          <p className="text-xs leading-snug text-white/85 sm:text-base sm:leading-normal">
+          <p className="text-sm leading-tight text-white/85 sm:text-base sm:leading-normal">
             At Rich G Collection, our goal is to ensure that the modern classic man has access to a
             collection that is sustainable, durable, authentic and comfortable at a bargain.
           </p>

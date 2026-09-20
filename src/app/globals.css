@@ -9,6 +9,7 @@
   --foreground: #171717;
   --surface: #f4f4f5;
   --border: rgba(0, 0, 0, 0.1);
+  color-scheme: light;
 }
 
 .dark {
@@ -16,6 +17,18 @@
   --foreground: #ededed;
   --surface: #18181b;
   --border: rgba(255, 255, 255, 0.1);
+  color-scheme: dark;
+}
+
+/* Without an explicit background/text color, browsers render native <select>
+   dropdown popups using the OS light theme regardless of page theme — the
+   `color-scheme` above fixes most of that, but Windows Chrome still defaults
+   the popup surface to white while inheriting our dark-mode (white) text
+   color, so force it explicitly here too. */
+.dark select,
+.dark select option {
+  background-color: #000;
+  color: #fff;
 }
 
 @theme inline {

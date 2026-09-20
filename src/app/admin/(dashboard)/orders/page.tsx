@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { formatKes } from '@/lib/money'
+import { OrderStatusSelect } from '@/components/admin/OrderStatusSelect'
 import type { OrderStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -81,7 +82,7 @@ export default async function AdminOrdersPage({
                 <StatusPill value={order.paymentStatus} />
               </td>
               <td className="py-3">
-                <StatusPill value={order.status} />
+                <OrderStatusSelect orderId={order.id} status={order.status} />
               </td>
               <td className="py-3 opacity-60">{order.createdAt.toLocaleDateString('en-KE')}</td>
             </tr>

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { verifyWebhookSignature } from '@/lib/paystack'
+import { applyOrderStockOut } from '@/lib/inventory'
 
 type PaystackChargeEvent = {
   event: string
@@ -48,20 +49,7 @@ export async function POST(request: Request) {
       data: { paymentStatus: 'PAID', status: 'PROCESSING' },
     })
 
-    const items = await tx.orderItem.findMany({ where: { orderId: order.id } })
-    for (const item of items) {
-      if (item.variantId) {
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: { stockQty: { decrement: item.quantity } },
-        })
-      } else {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stockQty: { decrement: item.quantity } },
-        })
-      }
-    }
+    await applyOrderStockOut(tx, order.id)
   })
 
   return Response.json({ received: true })

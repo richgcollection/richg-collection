@@ -16,6 +16,9 @@ export type ProductFormInitial = {
   description: string | null
   basePriceKes: number
   salePriceKes: number | null
+  costPriceKes: number | null
+  supplier: string | null
+  lowStockThreshold: number | null
   status: string
   featured: boolean
   manageStock: boolean
@@ -32,6 +35,9 @@ const EMPTY: ProductFormInitial = {
   description: null,
   basePriceKes: 0,
   salePriceKes: null,
+  costPriceKes: null,
+  supplier: null,
+  lowStockThreshold: null,
   status: 'published',
   featured: false,
   manageStock: true,
@@ -146,6 +152,43 @@ export function ProductForm({
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
+            Cost Price (KES, optional)
+          </label>
+          <input
+            name="costPriceKes"
+            type="number"
+            min={0}
+            defaultValue={initial.costPriceKes ?? ''}
+            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          />
+          <p className="mt-1 text-xs opacity-50">Used to compute profit in Inventory reports.</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">Supplier</label>
+          <input
+            name="supplier"
+            defaultValue={initial.supplier ?? ''}
+            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
+            Low Stock Threshold
+          </label>
+          <input
+            name="lowStockThreshold"
+            type="number"
+            min={0}
+            placeholder="Default: 5"
+            defaultValue={initial.lowStockThreshold ?? ''}
+            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          />
+        </div>
+      </div>
+
       <div>
         <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
           Short Description
@@ -190,7 +233,7 @@ export function ProductForm({
       </div>
 
       {!isEditing && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
               Sizes (comma separated, optional)
@@ -203,7 +246,17 @@ export function ProductForm({
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
-              Stock per Size
+              Colors (comma separated, optional)
+            </label>
+            <input
+              name="colors"
+              placeholder="Black, White"
+              className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
+              Stock per Combination
             </label>
             <input
               name="defaultStockPerSize"

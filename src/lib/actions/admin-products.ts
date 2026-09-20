@@ -16,6 +16,9 @@ const productSchema = z.object({
   description: z.string().optional(),
   basePriceKes: z.coerce.number().int().min(0),
   salePriceKes: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
+  costPriceKes: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
+  supplier: z.string().optional(),
+  lowStockThreshold: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
   status: z.enum(['published', 'draft']),
   featured: z.coerce.boolean(),
   manageStock: z.coerce.boolean(),
@@ -31,6 +34,9 @@ function parseProductForm(formData: FormData) {
     description: formData.get('description') || undefined,
     basePriceKes: formData.get('basePriceKes'),
     salePriceKes: formData.get('salePriceKes') || undefined,
+    costPriceKes: formData.get('costPriceKes') || undefined,
+    supplier: formData.get('supplier') || undefined,
+    lowStockThreshold: formData.get('lowStockThreshold') || undefined,
     status: formData.get('status'),
     featured: formData.get('featured') === 'on',
     manageStock: formData.get('manageStock') === 'on',
@@ -48,8 +54,7 @@ function parseImageUrls(formData: FormData): string[] {
     .slice(0, MAX_PRODUCT_IMAGES)
 }
 
-function parseSizes(formData: FormData): string[] {
-  const raw = String(formData.get('sizes') ?? '')
+function parseCsvList(raw: string): string[] {
   return Array.from(
     new Set(
       raw
@@ -58,6 +63,14 @@ function parseSizes(formData: FormData): string[] {
         .filter(Boolean),
     ),
   )
+}
+
+function parseSizes(formData: FormData): string[] {
+  return parseCsvList(String(formData.get('sizes') ?? ''))
+}
+
+function parseColors(formData: FormData): string[] {
+  return parseCsvList(String(formData.get('colors') ?? ''))
 }
 
 async function syncCategories(productId: string, categoryIds: string[]) {
@@ -78,37 +91,61 @@ async function syncImages(productId: string, urls: string[]) {
   }
 }
 
-/** Adds any sizes not already present as an option value + variant. Never removes existing ones here — see removeVariantAction. */
-async function syncSizes(productId: string, sizes: string[], defaultStockPerSize: number) {
-  if (sizes.length === 0) return
+async function getOrCreateOption(productId: string, name: string) {
+  const existing = await prisma.productOption.findFirst({ where: { productId, name }, include: { values: true } })
+  return existing ?? prisma.productOption.create({ data: { productId, name }, include: { values: true } })
+}
 
-  let sizeOption = await prisma.productOption.findFirst({
-    where: { productId, name: 'Size' },
-    include: { values: true },
+async function getOrCreateOptionValue(option: { id: string; values: { id: string; value: string }[] }, value: string) {
+  const existing = option.values.find((v) => v.value === value)
+  if (existing) return existing
+  const created = await prisma.productOptionValue.create({ data: { optionId: option.id, value } })
+  option.values.push(created)
+  return created
+}
+
+/**
+ * Adds any Size/Color combination not already present as a variant. Colors
+ * are optional — with sizes only (or colors only) this behaves like a single
+ * option dimension; with both, it creates the full Size×Color cartesian set.
+ * Never removes existing combinations — see removeVariantAction.
+ */
+async function syncSizes(productId: string, sizes: string[], colors: string[], defaultStockPerSize: number) {
+  if (sizes.length === 0 && colors.length === 0) return
+
+  const existingVariants = await prisma.productVariant.findMany({
+    where: { productId },
+    select: { optionValues: { select: { optionValueId: true } } },
   })
+  const existingCombos = new Set(
+    existingVariants.map((v) => v.optionValues.map((ov) => ov.optionValueId).sort().join('|')),
+  )
 
-  if (!sizeOption) {
-    sizeOption = await prisma.productOption.create({
-      data: { productId, name: 'Size' },
-      include: { values: true },
-    })
-  }
+  const sizeOption = sizes.length > 0 ? await getOrCreateOption(productId, 'Size') : null
+  const colorOption = colors.length > 0 ? await getOrCreateOption(productId, 'Color') : null
 
-  const existingValues = new Set(sizeOption.values.map((v) => v.value))
+  const sizeValues = sizeOption ? await Promise.all(sizes.map((s) => getOrCreateOptionValue(sizeOption, s))) : [null]
+  const colorValues = colorOption
+    ? await Promise.all(colors.map((c) => getOrCreateOptionValue(colorOption, c)))
+    : [null]
 
-  for (const size of sizes) {
-    if (existingValues.has(size)) continue
+  for (const sizeValue of sizeValues) {
+    for (const colorValue of colorValues) {
+      const optionValueIds = [sizeValue?.id, colorValue?.id].filter((v): v is string => Boolean(v))
+      if (optionValueIds.length === 0) continue
 
-    const optionValue = await prisma.productOptionValue.create({
-      data: { optionId: sizeOption.id, value: size },
-    })
-    await prisma.productVariant.create({
-      data: {
-        productId,
-        stockQty: defaultStockPerSize,
-        optionValues: { create: { optionValueId: optionValue.id } },
-      },
-    })
+      const comboKey = [...optionValueIds].sort().join('|')
+      if (existingCombos.has(comboKey)) continue
+
+      await prisma.productVariant.create({
+        data: {
+          productId,
+          stockQty: defaultStockPerSize,
+          optionValues: { create: optionValueIds.map((optionValueId) => ({ optionValueId })) },
+        },
+      })
+      existingCombos.add(comboKey)
+    }
   }
 }
 
@@ -134,8 +171,9 @@ export async function createProductAction(formData: FormData): Promise<ProductAc
   await syncImages(product.id, parseImageUrls(formData))
 
   const sizes = parseSizes(formData)
+  const colors = parseColors(formData)
   const defaultStock = Number(formData.get('defaultStockPerSize') ?? 0)
-  await syncSizes(product.id, sizes, defaultStock)
+  await syncSizes(product.id, sizes, colors, defaultStock)
 
   revalidatePath('/admin/products')
   redirect(`/admin/products/${product.id}/edit`)
@@ -163,8 +201,9 @@ export async function updateProductAction(productId: string, formData: FormData)
   await syncImages(productId, parseImageUrls(formData))
 
   const sizes = parseSizes(formData)
+  const colors = parseColors(formData)
   const defaultStock = Number(formData.get('defaultStockPerSize') ?? 0)
-  await syncSizes(productId, sizes, defaultStock)
+  await syncSizes(productId, sizes, colors, defaultStock)
 
   revalidatePath('/admin/products')
   revalidatePath(`/admin/products/${productId}/edit`)

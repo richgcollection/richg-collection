@@ -14,6 +14,7 @@ export type VariantRow = {
 export function VariantStockEditor({ productId, variants }: { productId: string; variants: VariantRow[] }) {
   const [rows, setRows] = useState(variants)
   const [newSizes, setNewSizes] = useState('')
+  const [newColors, setNewColors] = useState('')
   const [newSizesStock, setNewSizesStock] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -37,13 +38,14 @@ export function VariantStockEditor({ productId, variants }: { productId: string;
   }
 
   function addSizes() {
-    if (!newSizes.trim()) return
+    if (!newSizes.trim() && !newColors.trim()) return
     setError(null)
     startTransition(async () => {
-      const result = await addSizesAction(productId, newSizes, newSizesStock)
+      const result = await addSizesAction(productId, newSizes, newSizesStock, newColors)
       if (result.success) {
         setRows((prev) => [...prev, ...result.data])
         setNewSizes('')
+        setNewColors('')
       } else {
         setError(result.error)
       }
@@ -131,6 +133,17 @@ export function VariantStockEditor({ productId, variants }: { productId: string;
             value={newSizes}
             onChange={(e) => setNewSizes(e.target.value)}
             placeholder="e.g. XXL, XXXL"
+            className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
+            Add Colors (optional)
+          </label>
+          <input
+            value={newColors}
+            onChange={(e) => setNewColors(e.target.value)}
+            placeholder="e.g. Black, White"
             className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
           />
         </div>

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { Cart } from '@/lib/cart'
+import { upsertCustomerFromOrder } from '@/lib/customers'
 
 export function generateOrderNumber(): string {
   const year = new Date().getFullYear()
@@ -47,6 +48,16 @@ export async function createPendingOrder(
         })),
       },
     },
+  })
+
+  await upsertCustomerFromOrder({
+    fullName: shippingAddress.fullName,
+    phone: shippingAddress.phone,
+    email: shippingAddress.email,
+    town: shippingAddress.town,
+    productName: cart.items.map((item) => item.productName).join(', '),
+    quantity: cart.items.reduce((sum, item) => sum + item.quantity, 0),
+    orderValueKes: totalKes,
   })
 
   return order

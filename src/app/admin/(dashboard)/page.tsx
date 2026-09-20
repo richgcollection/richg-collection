@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { formatKes } from '@/lib/money'
+import { getStockSummary, getProfitSummary } from '@/lib/inventory'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +12,7 @@ async function getDashboardStats() {
   startOfMonth.setDate(1)
   startOfMonth.setHours(0, 0, 0, 0)
 
-  const [ordersToday, ordersThisMonth, revenueThisMonth, lowStockVariants, pendingOrders] =
+  const [ordersToday, ordersThisMonth, revenueThisMonth, stockSummary, pendingOrders, profitThisMonth] =
     await Promise.all([
       prisma.order.count({ where: { createdAt: { gte: startOfToday } } }),
       prisma.order.count({ where: { createdAt: { gte: startOfMonth } } }),
@@ -19,16 +20,18 @@ async function getDashboardStats() {
         where: { createdAt: { gte: startOfMonth }, paymentStatus: 'PAID' },
         _sum: { totalKes: true },
       }),
-      prisma.productVariant.count({ where: { stockQty: { lte: 3 } } }),
+      getStockSummary(),
       prisma.order.count({ where: { paymentStatus: 'PENDING' } }),
+      getProfitSummary({ from: startOfMonth }),
     ])
 
   return {
     ordersToday,
     ordersThisMonth,
     revenueThisMonth: revenueThisMonth._sum.totalKes ?? 0,
-    lowStockVariants,
+    lowStockCount: stockSummary.filter((r) => r.lowStock).length,
     pendingOrders,
+    profitThisMonth: profitThisMonth.profitKes,
   }
 }
 
@@ -39,8 +42,9 @@ export default async function AdminDashboardPage() {
     { label: 'Orders Today', value: stats.ordersToday },
     { label: 'Orders This Month', value: stats.ordersThisMonth },
     { label: 'Revenue This Month', value: formatKes(stats.revenueThisMonth) },
+    { label: 'Profit This Month', value: formatKes(stats.profitThisMonth) },
     { label: 'Pending Payments', value: stats.pendingOrders },
-    { label: 'Low Stock Variants', value: stats.lowStockVariants },
+    { label: 'Low Stock Items', value: stats.lowStockCount },
   ]
 
   return (

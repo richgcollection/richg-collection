@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth/dal'
 import { prisma } from '@/lib/prisma'
+import { applyOrderStockOut } from '@/lib/inventory'
 import type { ActionResult } from '@/lib/actions/cart'
 
 const FULFILLMENT_STATUSES = [
@@ -61,20 +62,7 @@ export async function markOrderPaidAction(orderId: string): Promise<ActionResult
       data: { paymentStatus: 'PAID', status: 'PROCESSING' },
     })
 
-    const items = await tx.orderItem.findMany({ where: { orderId } })
-    for (const item of items) {
-      if (item.variantId) {
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: { stockQty: { decrement: item.quantity } },
-        })
-      } else {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stockQty: { decrement: item.quantity } },
-        })
-      }
-    }
+    await applyOrderStockOut(tx, orderId)
   })
 
   revalidatePath(`/admin/orders/${orderId}`)

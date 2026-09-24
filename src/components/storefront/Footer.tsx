@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getCategories } from '@/lib/queries/products'
+import { CONTACT_EMAIL, WHATSAPP_DISPLAY, WHATSAPP_URL } from '@/lib/contact'
 
 export async function Footer() {
   const categories = await getCategories()
@@ -43,9 +44,17 @@ export async function Footer() {
         <div className="flex flex-col gap-3">
           <span className="font-medium tracking-wide uppercase opacity-60">Get in Touch</span>
           <p className="opacity-70">Nairobi, Kenya</p>
-          <Link href="/contact" className="opacity-70 hover:opacity-100">
-            Send us a message
-          </Link>
+          <a href={`mailto:${CONTACT_EMAIL}`} className="break-all opacity-70 hover:opacity-100">
+            {CONTACT_EMAIL}
+          </a>
+          <a
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="opacity-70 hover:opacity-100"
+          >
+            WhatsApp: {WHATSAPP_DISPLAY}
+          </a>
         </div>
       </div>
 

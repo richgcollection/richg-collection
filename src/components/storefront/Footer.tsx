@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getCategories } from '@/lib/queries/products'
 import { SOCIAL_ICONS } from '@/components/icons/ContactIcons'
+import { LogoFull } from '@/components/brand/Logo'
 import {
   CONTACT_EMAIL,
   PHONE_DISPLAY,
@@ -16,8 +17,10 @@ export async function Footer() {
   return (
     <footer className="border-t border-black/10 dark:border-white/10">
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 py-16 text-sm sm:grid-cols-4">
-        <div className="col-span-2 flex flex-col gap-3 sm:col-span-1">
-          <span className="text-base font-semibold tracking-wide uppercase">Rich G Collection</span>
+        <div className="col-span-2 flex flex-col gap-5 sm:col-span-1">
+          <Link href="/" className="self-start">
+            <LogoFull className="w-40" />
+          </Link>
           <p className="max-w-xs opacity-70">
             The modern classic man&apos;s wardrobe, sustainable, durable, and built for a man who takes
             care of himself.

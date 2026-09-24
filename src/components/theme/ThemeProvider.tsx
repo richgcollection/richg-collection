@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useSyncExternalStore } from 'react'
 
 type Theme = 'light' | 'dark'
 
@@ -18,16 +18,28 @@ function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle('dark', theme === 'dark')
 }
 
+// The `dark` class on <html> (set before paint by THEME_INIT_SCRIPT) is the
+// source of truth. Reading it through useSyncExternalStore renders the server
+// snapshot during hydration, so theme-dependent UI can't cause a mismatch that
+// makes React re-render the root and strip the class.
+function subscribe(onChange: () => void) {
+  const observer = new MutationObserver(onChange)
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+  return () => observer.disconnect()
+}
+
+function getSnapshot(): Theme {
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+}
+
+function getServerSnapshot(): Theme {
+  return 'light'
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Lazy initializer (not an effect): reads the class the blocking init
-  // script already applied, so no extra render/flash is needed to sync it.
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof document === 'undefined') return 'light'
-    return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
-  })
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 
   const setTheme = useCallback((next: Theme) => {
-    setThemeState(next)
     applyTheme(next)
     try {
       localStorage.setItem(STORAGE_KEY, next)

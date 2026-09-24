@@ -57,6 +57,20 @@ body {
   }
 }
 
+/* Brand logo: the PNGs in /public/brand are transparent masks, painted black
+   on light backgrounds and gold on dark ones so the logo follows the theme. */
+.brand-logo {
+  display: block;
+  background: #000;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+.dark .brand-logo {
+  background: linear-gradient(135deg, #f3d77e 0%, #d4af37 45%, #b8892a 100%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-marquee {
     animation-play-state: paused;

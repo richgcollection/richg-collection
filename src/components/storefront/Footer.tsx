@@ -1,6 +1,14 @@
 import Link from 'next/link'
 import { getCategories } from '@/lib/queries/products'
-import { CONTACT_EMAIL, WHATSAPP_DISPLAY, WHATSAPP_URL } from '@/lib/contact'
+import { SOCIAL_ICONS } from '@/components/icons/ContactIcons'
+import {
+  CONTACT_EMAIL,
+  PHONE_DISPLAY,
+  PHONE_URL,
+  SOCIAL_LINKS,
+  WHATSAPP_DISPLAY,
+  WHATSAPP_URL,
+} from '@/lib/contact'
 
 export async function Footer() {
   const categories = await getCategories()
@@ -47,6 +55,9 @@ export async function Footer() {
           <a href={`mailto:${CONTACT_EMAIL}`} className="break-all opacity-70 hover:opacity-100">
             {CONTACT_EMAIL}
           </a>
+          <a href={PHONE_URL} className="opacity-70 hover:opacity-100">
+            Call: {PHONE_DISPLAY}
+          </a>
           <a
             href={WHATSAPP_URL}
             target="_blank"
@@ -55,6 +66,23 @@ export async function Footer() {
           >
             WhatsApp: {WHATSAPP_DISPLAY}
           </a>
+          <div className="mt-2 flex gap-2">
+            {SOCIAL_LINKS.map(({ name, href }) => {
+              const Icon = SOCIAL_ICONS[name]
+              return (
+                <a
+                  key={name}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={name}
+                  className="flex size-9 items-center justify-center rounded-full border border-border opacity-70 transition hover:border-foreground hover:opacity-100"
+                >
+                  <Icon className="size-4" />
+                </a>
+              )
+            })}
+          </div>
         </div>
       </div>
 

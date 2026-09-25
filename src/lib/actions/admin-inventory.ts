@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth/dal'
+import { prisma } from '@/lib/prisma'
 import { NON_SALE_OUT_REASONS, recordStockIn, recordStockOut, type StockActionResult } from '@/lib/inventory'
 
 const stockInSchema = z.object({
@@ -67,4 +68,29 @@ export async function recordStockOutAction(formData: FormData): Promise<StockAct
   revalidatePath('/admin/inventory')
   revalidatePath('/admin')
   return result
+}
+
+const movementNoteSchema = z.object({
+  movementId: z.string().min(1),
+  note: z.string().max(2000, 'Note is too long.').transform((v) => v.trim()),
+})
+
+export async function updateStockMovementNoteAction(formData: FormData): Promise<StockActionResult> {
+  await requireAdmin()
+
+  const parsed = movementNoteSchema.safeParse({
+    movementId: formData.get('movementId'),
+    note: formData.get('note') ?? '',
+  })
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message }
+  }
+
+  await prisma.stockMovement.update({
+    where: { id: parsed.data.movementId },
+    data: { note: parsed.data.note || null },
+  })
+
+  revalidatePath('/admin/inventory')
+  return { success: true }
 }

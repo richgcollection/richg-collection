@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { formatKes } from '@/lib/money'
-import { getStockSummary, getProfitSummary, listStockMovements } from '@/lib/inventory'
+import { getStockSummary, getProfitSummary, listStockMovements, NEEDS_REVIEW_PREFIX } from '@/lib/inventory'
 import { StockMovementForms } from '@/components/admin/StockMovementForms'
+import { MovementNoteEditor } from '@/components/admin/MovementNoteEditor'
 import type { StockMovementReason } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -24,15 +25,16 @@ function isStockMovementReason(value: string): value is StockMovementReason {
 export default async function AdminInventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reason?: string }>
+  searchParams: Promise<{ reason?: string; review?: string }>
 }) {
-  const { reason } = await searchParams
+  const { reason, review } = await searchParams
   const activeReason = reason && isStockMovementReason(reason) ? reason : undefined
+  const needsReview = review === '1'
 
-  const [summary, profit, movements, products] = await Promise.all([
+  const [summary, profit, movements, products, reviewCount] = await Promise.all([
     getStockSummary(),
     getProfitSummary(),
-    listStockMovements(activeReason ? { reason: activeReason } : {}),
+    listStockMovements({ reason: activeReason, needsReview }),
     prisma.product.findMany({
       orderBy: { name: 'asc' },
       select: {
@@ -48,6 +50,7 @@ export default async function AdminInventoryPage({
         },
       },
     }),
+    prisma.stockMovement.count({ where: { note: { startsWith: NEEDS_REVIEW_PREFIX } } }),
   ])
 
   const productOptions = products.map((p) => ({
@@ -119,11 +122,21 @@ export default async function AdminInventoryPage({
             <Link
               href="/admin/inventory"
               className={`rounded-full border px-3 py-1 text-xs ${
-                !activeReason ? 'border-foreground' : 'border-black/10 dark:border-white/10'
+                !activeReason && !needsReview ? 'border-foreground' : 'border-black/10 dark:border-white/10'
               }`}
             >
               All
             </Link>
+            {reviewCount > 0 && (
+              <Link
+                href="/admin/inventory?review=1"
+                className={`rounded-full border px-3 py-1 text-xs text-amber-700 dark:text-amber-400 ${
+                  needsReview ? 'border-amber-500' : 'border-amber-500/40'
+                }`}
+              >
+                Needs review ({reviewCount})
+              </Link>
+            )}
             {(Object.entries(REASON_LABELS) as [StockMovementReason, string][]).map(([value, label]) => (
               <Link
                 key={value}
@@ -146,6 +159,7 @@ export default async function AdminInventoryPage({
               <th className="py-2">Direction</th>
               <th className="py-2">Reason</th>
               <th className="py-2">Qty</th>
+              <th className="py-2">Party</th>
               <th className="py-2">Note</th>
             </tr>
           </thead>
@@ -164,13 +178,16 @@ export default async function AdminInventoryPage({
                   <td className="py-2">{m.direction}</td>
                   <td className="py-2">{REASON_LABELS[m.reason]}</td>
                   <td className="py-2">{m.quantity}</td>
-                  <td className="py-2 opacity-70">{m.counterparty ?? m.supplier ?? m.note ?? '—'}</td>
+                  <td className="py-2 opacity-70">{m.counterparty ?? m.supplier ?? '—'}</td>
+                  <td className="py-2">
+                    <MovementNoteEditor movementId={m.id} note={m.note} />
+                  </td>
                 </tr>
               )
             })}
             {movements.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-8 text-center opacity-60">
+                <td colSpan={7} className="py-8 text-center opacity-60">
                   No stock movements yet.
                 </td>
               </tr>

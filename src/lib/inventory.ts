@@ -297,7 +297,15 @@ export async function getProfitSummary(range?: { from?: Date; to?: Date }): Prom
   }
 }
 
-export type MovementFilter = { productId?: string; reason?: StockMovementReason; direction?: StockDirection }
+/** Movements whose note starts with this are flagged for an admin to check (see MovementNoteEditor). */
+export const NEEDS_REVIEW_PREFIX = 'Needs review:'
+
+export type MovementFilter = {
+  productId?: string
+  reason?: StockMovementReason
+  direction?: StockDirection
+  needsReview?: boolean
+}
 
 export async function listStockMovements(filter: MovementFilter = {}, take = 100) {
   return prisma.stockMovement.findMany({
@@ -305,6 +313,7 @@ export async function listStockMovements(filter: MovementFilter = {}, take = 100
       productId: filter.productId,
       reason: filter.reason,
       direction: filter.direction,
+      note: filter.needsReview ? { startsWith: NEEDS_REVIEW_PREFIX } : undefined,
     },
     orderBy: { createdAt: 'desc' },
     take,

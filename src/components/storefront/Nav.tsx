@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
-import { LogoLockup } from '@/components/brand/Logo'
+import { LogoMark } from '@/components/brand/Logo'
 
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
@@ -21,8 +21,8 @@ export function Nav() {
   return (
     <header className="border-b border-black/10 dark:border-white/10">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <Link href="/" onClick={() => setMenuOpen(false)}>
-          <LogoLockup />
+        <Link href="/" aria-label="Rich G Collection home" onClick={() => setMenuOpen(false)}>
+          <LogoMark className="h-10" />
         </Link>
 
         <nav className="hidden items-center gap-6 text-sm md:flex">

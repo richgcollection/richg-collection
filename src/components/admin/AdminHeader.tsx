@@ -1,12 +1,12 @@
 import { adminLogoutAction } from '@/lib/actions/admin-auth'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
-import { LogoImage } from '@/components/brand/Logo'
+import { LogoMark } from '@/components/brand/Logo'
 
 export function AdminHeader({ email }: { email: string }) {
   return (
     <header className="flex items-center justify-between border-b border-black/10 px-6 py-4 dark:border-white/10">
       <div className="flex items-center gap-3">
-        <LogoImage part="mark" className="h-8" />
+        <LogoMark className="h-8" />
         <span className="text-sm font-medium">Admin</span>
       </div>
       <div className="flex items-center gap-4">

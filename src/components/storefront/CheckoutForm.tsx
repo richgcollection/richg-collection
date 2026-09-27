@@ -1,10 +1,11 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import { placeOrderAction } from '@/lib/actions/checkout'
 
 export function CheckoutForm({ towns, prefillEmail }: { towns: string[]; prefillEmail?: string | null }) {
   const [state, formAction, isPending] = useActionState(placeOrderAction, undefined)
+  const [town, setTown] = useState('')
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -22,21 +23,15 @@ export function CheckoutForm({ towns, prefillEmail }: { towns: string[]; prefill
       <Field label="Email" name="email" type="email" autoComplete="email" required defaultValue={prefillEmail ?? ''} />
 
       <div>
-        <p className="mb-1 text-xs font-medium tracking-wide uppercase opacity-70">Delivery Address</p>
-        <div className="flex flex-col gap-4">
-          <Field label="Street Address" name="line1" autoComplete="address-line1" required minLength={3} />
-          <Field label="Apartment, suite, etc. (optional)" name="line2" autoComplete="address-line2" />
-        </div>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
+        <label htmlFor="town" className="mb-1 block text-xs font-medium tracking-wide uppercase opacity-70">
           Delivery Town
         </label>
         <select
+          id="town"
           name="town"
           required
-          defaultValue=""
+          value={town}
+          onChange={(e) => setTown(e.target.value)}
           className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
         >
           <option value="" disabled>
@@ -50,6 +45,12 @@ export function CheckoutForm({ towns, prefillEmail }: { towns: string[]; prefill
           <option value="Other">Other</option>
         </select>
       </div>
+
+      {town === 'Other' && (
+        <Field label="Your Town" name="otherTown" autoComplete="address-level2" required minLength={2} />
+      )}
+
+      <Field label="Delivery notes, e.g. estate or landmark (optional)" name="line2" autoComplete="address-line1" />
 
       <button
         type="submit"

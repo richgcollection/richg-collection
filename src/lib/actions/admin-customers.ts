@@ -109,6 +109,41 @@ export async function createCustomerAction(formData: FormData): Promise<ActionRe
   return { success: true }
 }
 
+/** Sets or clears a customer's phone after the fact — e.g. buyers imported from sales records by name only. */
+export async function updateCustomerPhoneAction(formData: FormData): Promise<ActionResult> {
+  await requireAdmin()
+
+  const customerId = formData.get('customerId')
+  const raw = formData.get('phone')
+  if (typeof customerId !== 'string' || !customerId || typeof raw !== 'string') {
+    return { success: false, error: 'Invalid request.' }
+  }
+
+  const phone = normalizePhone(raw)
+  if (raw.trim() && !phone) {
+    return { success: false, error: 'Enter a valid phone number.' }
+  }
+  if (phone && !/^\d{9,15}$/.test(phone)) {
+    return { success: false, error: 'That number has the wrong number of digits.' }
+  }
+
+  const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { id: true } })
+  if (!customer) return { success: false, error: 'Customer not found.' }
+
+  if (phone) {
+    const existing = await prisma.customer.findUnique({ where: { phone }, select: { id: true, firstName: true, lastName: true } })
+    if (existing && existing.id !== customerId) {
+      const name = `${existing.firstName} ${existing.lastName ?? ''}`.trim()
+      return { success: false, error: `That number already belongs to ${name}.` }
+    }
+  }
+
+  await prisma.customer.update({ where: { id: customerId }, data: { phone } })
+
+  revalidatePath('/admin/customers')
+  return { success: true }
+}
+
 export async function deleteCustomerAction(customerId: string): Promise<ActionResult> {
   await requireAdmin()
   await prisma.customer.delete({ where: { id: customerId } })

@@ -4,6 +4,8 @@ import { formatStoreDateTime } from '@/lib/dates'
 import { AddCustomerForm } from '@/components/admin/AddCustomerForm'
 import { CustomerDeleteButton } from '@/components/admin/CustomerDeleteButton'
 import { CustomerRow, type CustomerPurchase } from '@/components/admin/CustomerRow'
+import { CustomerPhoneEditor } from '@/components/admin/CustomerPhoneEditor'
+import { getLifetimeSpendByCustomer } from '@/lib/customers'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,23 +14,27 @@ const COLUMN_COUNT = 10
 export default async function AdminCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{ q?: string; missing?: string }>
 }) {
-  const { q } = await searchParams
+  const { q, missing } = await searchParams
   const query = q?.trim()
+  const missingPhone = missing === 'phone'
 
-  const [customers, products] = await Promise.all([
+  const [customers, products, ledgerSpend, missingPhoneCount] = await Promise.all([
     prisma.customer.findMany({
-      where: query
-        ? {
-            OR: [
-              { firstName: { contains: query, mode: 'insensitive' } },
-              { lastName: { contains: query, mode: 'insensitive' } },
-              { phone: { contains: query } },
-              { email: { contains: query, mode: 'insensitive' } },
-            ],
-          }
-        : undefined,
+      where: {
+        ...(missingPhone ? { phone: null } : {}),
+        ...(query
+          ? {
+              OR: [
+                { firstName: { contains: query, mode: 'insensitive' } },
+                { lastName: { contains: query, mode: 'insensitive' } },
+                { phone: { contains: query } },
+                { email: { contains: query, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
       include: {
@@ -53,6 +59,8 @@ export default async function AdminCustomersPage({
       },
     }),
     prisma.product.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    getLifetimeSpendByCustomer(),
+    prisma.customer.count({ where: { phone: null } }),
   ])
 
   return (
@@ -71,7 +79,8 @@ export default async function AdminCustomersPage({
         <AddCustomerForm products={products} />
       </div>
 
-      <form method="GET" className="mt-8 flex gap-2">
+      <form method="GET" className="mt-8 flex flex-wrap items-center gap-2">
+        {missingPhone && <input type="hidden" name="missing" value="phone" />}
         <input
           name="q"
           defaultValue={query}
@@ -84,6 +93,16 @@ export default async function AdminCustomersPage({
         >
           Search
         </button>
+        {missingPhoneCount > 0 && (
+          <a
+            href={missingPhone ? '/admin/customers' : '/admin/customers?missing=phone'}
+            className={`rounded-full border px-4 py-2 text-sm ${
+              missingPhone ? 'border-foreground font-medium' : 'border-black/10 dark:border-white/10'
+            }`}
+          >
+            {missingPhone ? 'Show all customers' : `Missing phone (${missingPhoneCount})`}
+          </a>
+        )}
       </form>
 
       <table className="mt-6 w-full text-sm">
@@ -142,13 +161,16 @@ export default async function AdminCustomersPage({
                   <td className="py-3 font-medium">
                     {customer.firstName} {customer.lastName ?? ''}
                   </td>
-                  <td className="py-3 opacity-80">{customer.phone ?? '—'}</td>
+                  <td className="py-3">
+                    <CustomerPhoneEditor customerId={customer.id} phone={customer.phone} />
+                  </td>
                   <td className="py-3 opacity-80">{customer.email ?? '—'}</td>
                   <td className="py-3 opacity-80">{customer.location ?? '—'}</td>
                   <td className="py-3 opacity-80">{customer.source}</td>
                   <td className="py-3 opacity-80">{customer.lastProduct ?? '—'}</td>
                   <td className="py-3">{customer.totalOrders}</td>
-                  <td className="py-3">{formatKes(customer.totalSpentKes)}</td>
+                  {/* Same figure the Meta CSV exports: the sales ledger, with the checkout counter as a fallback. */}
+                  <td className="py-3">{formatKes(Math.max(ledgerSpend.get(customer.id) ?? 0, customer.totalSpentKes))}</td>
                   <td className="py-3">
                     <CustomerDeleteButton customerId={customer.id} />
                   </td>

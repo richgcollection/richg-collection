@@ -73,6 +73,66 @@ function normalizeGenderForMeta(raw: string | null | undefined): string {
   return ''
 }
 
+/**
+ * International format with the country code, grouped in threes
+ * (`254712345678` -> `+254 712 345 678`). The spaces are what stop Excel from
+ * reading the number as a numeral and showing it as `2.54713E+11` (and then
+ * saving it back that way); Meta strips the `+` and spaces itself on upload.
+ */
+export function formatPhoneForExport(phone: string | null | undefined): string {
+  const digits = normalizePhone(phone)
+  if (!digits) return ''
+  return `+${digits.match(/.{1,3}/g)!.join(' ')}`
+}
+
+const normalizeName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
+
+/**
+ * Lifetime spend per customer id, in KES, from the sales ledger (manual and
+ * online sales) — the stored `totalSpentKes` misses every sale recorded
+ * outside the website checkout, including the whole imported history.
+ *
+ * Online sales are matched by the order's phone number. Manual sales only
+ * carry the buyer's name, so they are matched on the exact full name; when
+ * the same name belongs to several customer records (typically the same
+ * person imported with and without a phone), the one record with a phone
+ * gets the spend. Names that still don't resolve to exactly one customer are
+ * left out rather than guessed.
+ */
+export async function getLifetimeSpendByCustomer(): Promise<Map<string, number>> {
+  const [customers, sales] = await Promise.all([
+    prisma.customer.findMany({ select: { id: true, firstName: true, lastName: true, phone: true } }),
+    prisma.stockMovement.findMany({
+      where: { direction: 'OUT', reason: { in: ['MANUAL_SALE', 'ONLINE_SALE'] } },
+      select: { quantity: true, unitPriceKes: true, counterparty: true, order: { select: { guestPhone: true } } },
+    }),
+  ])
+
+  const byPhone = new Map<string, string>()
+  const byName = new Map<string, Array<{ id: string; hasPhone: boolean }>>()
+  for (const c of customers) {
+    if (c.phone) byPhone.set(c.phone, c.id)
+    const name = normalizeName(`${c.firstName} ${c.lastName ?? ''}`)
+    byName.set(name, [...(byName.get(name) ?? []), { id: c.id, hasPhone: Boolean(c.phone) }])
+  }
+
+  const resolveName = (raw: string): string | null => {
+    const matches = byName.get(normalizeName(raw)) ?? []
+    if (matches.length === 1) return matches[0].id
+    const withPhone = matches.filter((m) => m.hasPhone)
+    return withPhone.length === 1 ? withPhone[0].id : null
+  }
+
+  const spend = new Map<string, number>()
+  for (const s of sales) {
+    const phone = normalizePhone(s.order?.guestPhone)
+    const id = (phone && byPhone.get(phone)) || (s.counterparty ? resolveName(s.counterparty) : null)
+    if (!id) continue
+    spend.set(id, (spend.get(id) ?? 0) + (s.unitPriceKes ?? 0) * s.quantity)
+  }
+  return spend
+}
+
 const META_AUDIENCE_HEADERS = ['email', 'phone', 'fn', 'ln', 'ct', 'country', 'gen', 'value'] as const
 
 export type MetaAudienceCustomer = {
@@ -82,27 +142,27 @@ export type MetaAudienceCustomer = {
   lastName: string | null
   location: string | null
   gender: string | null
-  totalSpentKes: number
+  lifetimeSpendKes: number
 }
 
 /**
  * Builds a CSV in Meta's Custom Audience "customer list" column schema
  * (email,phone,fn,ln,ct,country,gen,value). Meta hashes/normalizes these plain
- * values itself on upload. `value` is lifetime spend in USD, for value-based
- * lookalike audiences.
+ * values itself on upload. `value` is lifetime spend converted to USD (a bare
+ * number, no symbol, as Meta requires), for value-based lookalike audiences.
  */
 export function toMetaAudienceCsv(customers: MetaAudienceCustomer[]): string {
   const lines = [META_AUDIENCE_HEADERS.join(',')]
   for (const customer of customers) {
     const row = [
       customer.email?.trim().toLowerCase() ?? '',
-      customer.phone ?? '',
+      formatPhoneForExport(customer.phone),
       customer.firstName.trim().toLowerCase(),
       (customer.lastName ?? '').trim().toLowerCase(),
       (customer.location ?? '').trim().toLowerCase(),
       'ke',
       normalizeGenderForMeta(customer.gender),
-      kesToUsd(customer.totalSpentKes).toFixed(2),
+      kesToUsd(customer.lifetimeSpendKes).toFixed(2),
     ]
     lines.push(row.map(csvEscape).join(','))
   }

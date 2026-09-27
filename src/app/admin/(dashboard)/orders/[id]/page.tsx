@@ -63,10 +63,9 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             <p>{shippingAddress.fullName}</p>
             <p>{shippingAddress.phone}</p>
             <p>{shippingAddress.email}</p>
-            <p>
-              {shippingAddress.line1}
-              {shippingAddress.line2 ? `, ${shippingAddress.line2}` : ''}
-            </p>
+            {/* Newer orders store the town in line1 as well, so skip it when it would repeat. */}
+            {shippingAddress.line1 !== shippingAddress.town && <p>{shippingAddress.line1}</p>}
+            {shippingAddress.line2 && <p>{shippingAddress.line2}</p>}
             <p>{shippingAddress.town}</p>
           </div>
         </div>

@@ -29,15 +29,18 @@ ALTER TABLE "OrderStatusEvent" ADD CONSTRAINT "OrderStatusEvent_orderId_fkey" FO
 ALTER TABLE "OrderStatusEvent" ADD CONSTRAINT "OrderStatusEvent_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- Backfill: link existing website orders to customers using the same phone
--- normalization as normalizePhone() in src/lib/customers.ts.
+-- normalization as normalizePhone() in src/lib/customers.ts. (A correlated
+-- subquery, because an UPDATE's FROM-clause LATERAL can't reference "o".)
 UPDATE "Order" o
 SET "customerId" = c."id"
-FROM "Customer" c,
-     LATERAL (SELECT regexp_replace(COALESCE(o."guestPhone", ''), '\D', '', 'g') AS d) p
-WHERE c."phone" = CASE
-    WHEN p.d LIKE '254%' THEN p.d
-    WHEN p.d LIKE '0%' THEN '254' || substr(p.d, 2)
-    WHEN length(p.d) = 9 THEN '254' || p.d
-    ELSE p.d
-  END
-  AND p.d <> '';
+FROM "Customer" c
+WHERE c."phone" = (
+  SELECT CASE
+      WHEN p.d LIKE '254%' THEN p.d
+      WHEN p.d LIKE '0%' THEN '254' || substr(p.d, 2)
+      WHEN length(p.d) = 9 THEN '254' || p.d
+      ELSE p.d
+    END
+  FROM (SELECT regexp_replace(COALESCE(o."guestPhone", ''), '\D', '', 'g') AS d) p
+  WHERE p.d <> ''
+);

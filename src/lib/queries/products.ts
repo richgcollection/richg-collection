@@ -9,6 +9,7 @@ export type ProductListItem = {
   compareAtPriceKes: number | null
   imageUrl: string | null
   inStock: boolean
+  categorySlugs: string[]
 }
 
 export type ProductSort = 'newest' | 'price-asc' | 'price-desc'
@@ -32,6 +33,7 @@ function toListItem(product: {
   manageStock: boolean
   images: { url: string }[]
   variants: { stockQty: number }[]
+  categories: { category: { slug: string } }[]
 }): ProductListItem {
   const inStock = product.manageStock
     ? product.variants.length > 0
@@ -47,6 +49,7 @@ function toListItem(product: {
     compareAtPriceKes: product.salePriceKes ? product.basePriceKes : null,
     imageUrl: product.images[0]?.url ?? null,
     inStock,
+    categorySlugs: product.categories.map((pc) => pc.category.slug),
   }
 }
 
@@ -60,6 +63,7 @@ const LIST_SELECT = {
   manageStock: true,
   images: { orderBy: { position: 'asc' as const }, take: 1, select: { url: true } },
   variants: { select: { stockQty: true } },
+  categories: { select: { category: { select: { slug: true } } } },
 } satisfies Prisma.ProductSelect
 
 export async function getFeaturedProducts(limit = 4): Promise<ProductListItem[]> {
@@ -112,6 +116,26 @@ export async function getProducts(params: ProductListParams = {}): Promise<Produ
   })
 
   return products.map(toListItem)
+}
+
+/**
+ * Display order for subcategory sections on a parent category page (top to
+ * bottom). Subcategories not listed here follow, alphabetically.
+ */
+const SUBCATEGORY_DISPLAY_ORDER = ['round-neck-tshirts', 'oversized-tshirts', 'long-sleeve-tshirts']
+
+function subcategoryRank(slug: string): number {
+  const index = SUBCATEGORY_DISPLAY_ORDER.indexOf(slug)
+  return index === -1 ? SUBCATEGORY_DISPLAY_ORDER.length : index
+}
+
+export async function getSubcategories(parentId: string) {
+  const children = await prisma.category.findMany({
+    where: { parentId },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, slug: true },
+  })
+  return children.sort((a, b) => subcategoryRank(a.slug) - subcategoryRank(b.slug))
 }
 
 export async function getCategories() {

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { recordStockInAction, recordStockOutAction } from '@/lib/actions/admin-inventory'
 import { todayInStoreTz } from '@/lib/dates'
+import { ProductMultiSelect } from '@/components/admin/ProductMultiSelect'
 
 export type InventoryProductOption = {
   id: string
@@ -26,6 +27,20 @@ const OUT_REASONS = [
 
 const inputClass = 'rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10'
 
+type OutLine = {
+  key: string
+  productId: string
+  variantId: string
+  quantity: string
+  unitPriceKes: string
+}
+
+let outLineSeq = 0
+function newOutLine(productId: string): OutLine {
+  outLineSeq += 1
+  return { key: `line-${outLineSeq}`, productId, variantId: '', quantity: '', unitPriceKes: '' }
+}
+
 export function StockMovementForms({
   products,
   customers,
@@ -35,15 +50,39 @@ export function StockMovementForms({
 }) {
   const [today] = useState(() => todayInStoreTz())
   const [inProductId, setInProductId] = useState('')
-  const [outProductId, setOutProductId] = useState('')
+  const [outLines, setOutLines] = useState<OutLine[]>([])
   const [inError, setInError] = useState<string | null>(null)
   const [outError, setOutError] = useState<string | null>(null)
   const [inSuccess, setInSuccess] = useState(false)
   const [outSuccess, setOutSuccess] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const inVariants = products.find((p) => p.id === inProductId)?.variants ?? []
-  const outVariants = products.find((p) => p.id === outProductId)?.variants ?? []
+  const productsById = new Map(products.map((p) => [p.id, p]))
+  const inVariants = productsById.get(inProductId)?.variants ?? []
+  const outProductIds = [...new Set(outLines.map((l) => l.productId))]
+
+  function setOutProducts(ids: string[]) {
+    setOutLines((lines) => {
+      const kept = lines.filter((l) => ids.includes(l.productId))
+      const added = ids.filter((id) => !kept.some((l) => l.productId === id)).map(newOutLine)
+      return [...kept, ...added]
+    })
+  }
+
+  function updateOutLine(key: string, patch: Partial<OutLine>) {
+    setOutLines((lines) => lines.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+  }
+
+  function addOutLineFor(productId: string, afterKey: string) {
+    setOutLines((lines) => {
+      const index = lines.findIndex((l) => l.key === afterKey)
+      return [...lines.slice(0, index + 1), newOutLine(productId), ...lines.slice(index + 1)]
+    })
+  }
+
+  function removeOutLine(key: string) {
+    setOutLines((lines) => lines.filter((l) => l.key !== key))
+  }
 
   function handleStockIn(formData: FormData) {
     setInError(null)
@@ -62,9 +101,25 @@ export function StockMovementForms({
   function handleStockOut(formData: FormData) {
     setOutError(null)
     setOutSuccess(false)
+    if (outLines.length === 0) {
+      setOutError('Select at least one product.')
+      return
+    }
+    formData.set(
+      'items',
+      JSON.stringify(
+        outLines.map(({ productId, variantId, quantity, unitPriceKes }) => ({
+          productId,
+          variantId,
+          quantity,
+          unitPriceKes,
+        })),
+      ),
+    )
     startTransition(async () => {
       const result = await recordStockOutAction(formData)
       if (result.success) {
+        setOutLines([])
         setOutSuccess(true)
         setTimeout(() => setOutSuccess(false), 3000)
       } else {
@@ -124,29 +179,81 @@ export function StockMovementForms({
         <h2 className="mb-4 text-sm font-medium tracking-wide uppercase opacity-70">Record Stock Out</h2>
         {outError && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{outError}</p>}
         <div className="flex flex-col gap-3">
-          <select
-            name="productId"
-            required
-            value={outProductId}
-            onChange={(e) => setOutProductId(e.target.value)}
-            className={inputClass}
-          >
-            <option value="">Select product…</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          {outVariants.length > 0 && (
-            <select name="variantId" required className={inputClass}>
-              <option value="">Select size/color…</option>
-              {outVariants.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
+          <ProductMultiSelect
+            options={products}
+            selectedIds={outProductIds}
+            onChange={setOutProducts}
+            placeholder="Search and select products…"
+          />
+          {outLines.length > 0 && (
+            <ul className="flex flex-col gap-3">
+              {outLines.map((line) => {
+                const product = productsById.get(line.productId)
+                const variants = product?.variants ?? []
+                return (
+                  <li
+                    key={line.key}
+                    className="flex flex-col gap-2 rounded-md border border-black/5 p-3 dark:border-white/5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-medium">{product?.name ?? 'Unknown product'}</span>
+                      <div className="flex shrink-0 items-center gap-3 text-xs">
+                        {variants.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => addOutLineFor(line.productId, line.key)}
+                            className="opacity-60 hover:opacity-100"
+                          >
+                            + Another size/color
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeOutLine(line.key)}
+                          className="text-red-600 opacity-70 hover:opacity-100 dark:text-red-400"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                    {variants.length > 0 && (
+                      <select
+                        required
+                        value={line.variantId}
+                        onChange={(e) => updateOutLine(line.key, { variantId: e.target.value })}
+                        className={inputClass}
+                      >
+                        <option value="">Select size/color…</option>
+                        {variants.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        type="number"
+                        min={1}
+                        required
+                        placeholder="Quantity"
+                        value={line.quantity}
+                        onChange={(e) => updateOutLine(line.key, { quantity: e.target.value })}
+                        className={inputClass}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Price per unit (KES, if sale)"
+                        value={line.unitPriceKes}
+                        onChange={(e) => updateOutLine(line.key, { unitPriceKes: e.target.value })}
+                        className={inputClass}
+                      />
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
           )}
           <select name="reason" required defaultValue="MANUAL_SALE" className={inputClass}>
             {OUT_REASONS.map((r) => (
@@ -155,16 +262,6 @@ export function StockMovementForms({
               </option>
             ))}
           </select>
-          <div className="grid grid-cols-2 gap-3">
-            <input name="quantity" type="number" min={1} required placeholder="Quantity" className={inputClass} />
-            <input
-              name="unitPriceKes"
-              type="number"
-              min={0}
-              placeholder="Price per unit (KES, if sale)"
-              className={inputClass}
-            />
-          </div>
           <label className="flex flex-col gap-1">
             <span className="text-xs opacity-70">Date</span>
             <input name="date" type="date" required defaultValue={today} max={today} className={inputClass} />

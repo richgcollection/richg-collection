@@ -38,26 +38,39 @@ export async function recordStockInAction(formData: FormData): Promise<StockActi
   return result
 }
 
-const stockOutSchema = z.object({
+const stockOutItemSchema = z.object({
   productId: z.string().min(1, 'Select a product.'),
-  variantId: z.string().optional(),
+  variantId: z
+    .string()
+    .optional()
+    .transform((v) => v || undefined),
   quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1.'),
-  reason: z.enum(NON_SALE_OUT_REASONS),
   unitPriceKes: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
+})
+
+const stockOutSchema = z.object({
+  items: z.array(stockOutItemSchema).min(1, 'Select at least one product.'),
+  reason: z.enum(NON_SALE_OUT_REASONS),
   counterparty: z.string().optional(),
   note: z.string().optional(),
   date: z.string().min(1, 'Select the date the stock went out.'),
 })
 
+function parseJsonField(value: FormDataEntryValue | null): unknown {
+  if (typeof value !== 'string') return undefined
+  try {
+    return JSON.parse(value)
+  } catch {
+    return undefined
+  }
+}
+
 export async function recordStockOutAction(formData: FormData): Promise<StockActionResult> {
   const admin = await requireAdmin()
 
   const parsed = stockOutSchema.safeParse({
-    productId: formData.get('productId'),
-    variantId: formData.get('variantId') || undefined,
-    quantity: formData.get('quantity'),
+    items: parseJsonField(formData.get('items')) ?? [],
     reason: formData.get('reason'),
-    unitPriceKes: formData.get('unitPriceKes') || undefined,
     counterparty: formData.get('counterparty') || undefined,
     note: formData.get('note') || undefined,
     date: formData.get('date') ?? '',

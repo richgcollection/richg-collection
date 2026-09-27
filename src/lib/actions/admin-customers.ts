@@ -15,11 +15,24 @@ const customerSchema = z.object({
   gender: z.string().optional(),
   location: z.string().optional(),
   source: z.string().optional(),
-  productId: z.string().optional(),
-  lastQuantity: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
+  products: z.array(
+    z.object({
+      productId: z.string().min(1),
+      quantity: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
+    }),
+  ),
   lastOrderValueKes: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
   notes: z.string().optional(),
 })
+
+function parseProducts(value: FormDataEntryValue | null): unknown {
+  if (typeof value !== 'string' || value === '') return []
+  try {
+    return JSON.parse(value)
+  } catch {
+    return []
+  }
+}
 
 /** For leads collected outside checkout (social DMs, walk-ins) — mirrors the workbook's manual Customer-entry form. */
 export async function createCustomerAction(formData: FormData): Promise<ActionResult> {
@@ -33,8 +46,7 @@ export async function createCustomerAction(formData: FormData): Promise<ActionRe
     gender: formData.get('gender') || undefined,
     location: formData.get('location') || undefined,
     source: formData.get('source') || undefined,
-    productId: formData.get('productId') || undefined,
-    lastQuantity: formData.get('lastQuantity') || undefined,
+    products: parseProducts(formData.get('products')),
     lastOrderValueKes: formData.get('lastOrderValueKes') || undefined,
     notes: formData.get('notes') || undefined,
   })
@@ -48,15 +60,26 @@ export async function createCustomerAction(formData: FormData): Promise<ActionRe
   }
 
   let lastProduct: string | null = null
-  if (parsed.data.productId) {
-    const product = await prisma.product.findUnique({
-      where: { id: parsed.data.productId },
-      select: { name: true },
+  let lastQuantity: number | null = null
+  const picked = parsed.data.products
+  if (picked.length > 0) {
+    const found = await prisma.product.findMany({
+      where: { id: { in: picked.map((p) => p.productId) } },
+      select: { id: true, name: true },
     })
-    if (!product) {
-      return { success: false, error: 'Selected product no longer exists.' }
+    const namesById = new Map(found.map((p) => [p.id, p.name]))
+    if (picked.some((p) => !namesById.has(p.productId))) {
+      return { success: false, error: 'A selected product no longer exists.' }
     }
-    lastProduct = product.name
+    // Single product keeps the plain name; several are listed with their quantities, e.g. "Dress ×2, Bag ×1".
+    lastProduct =
+      picked.length === 1
+        ? namesById.get(picked[0].productId)!
+        : picked
+            .map((p) => `${namesById.get(p.productId)}${p.quantity ? ` ×${p.quantity}` : ''}`)
+            .join(', ')
+    const quantities = picked.map((p) => p.quantity).filter((q): q is number => q != null)
+    lastQuantity = quantities.length > 0 ? quantities.reduce((sum, q) => sum + q, 0) : null
   }
 
   if (phone) {
@@ -76,7 +99,7 @@ export async function createCustomerAction(formData: FormData): Promise<ActionRe
       location: parsed.data.location || null,
       source: parsed.data.source || 'Manual',
       lastProduct,
-      lastQuantity: parsed.data.lastQuantity ?? null,
+      lastQuantity,
       lastOrderValueKes: parsed.data.lastOrderValueKes ?? null,
       notes: parsed.data.notes || null,
     },

@@ -102,74 +102,84 @@ export async function recordStockIn(input: {
 export const NON_SALE_OUT_REASONS = ['MANUAL_SALE', 'DAMAGE', 'REWARD', 'INFLUENCER', 'ADJUSTMENT'] as const
 export type ManualStockOutReason = (typeof NON_SALE_OUT_REASONS)[number]
 
-export async function recordStockOut(input: {
+export type StockOutItem = {
   productId: string
   variantId?: string | null
   quantity: number
-  reason: ManualStockOutReason
   unitPriceKes?: number | null
+}
+
+/**
+ * Records one or more manual stock-out lines that share a reason, date and
+ * counterparty. All lines are written in one transaction, so if any line is
+ * short on stock nothing is recorded.
+ */
+export async function recordStockOut(input: {
+  items: StockOutItem[]
+  reason: ManualStockOutReason
   counterparty?: string | null
   note?: string | null
   createdById?: string | null
   /** When the stock actually left (defaults to now). Stored as the movement's `createdAt` so history and profit ranges use it. */
   occurredAt?: Date | null
 }): Promise<StockActionResult> {
-  if (input.quantity <= 0) {
+  if (input.items.length === 0) {
+    return { success: false, error: 'Select at least one product.' }
+  }
+  if (input.items.some((item) => item.quantity <= 0)) {
     return { success: false, error: 'Quantity must be greater than zero.' }
   }
 
   try {
     await prisma.$transaction(async (tx) => {
-      const current = input.variantId
-        ? await tx.productVariant.findUniqueOrThrow({
-            where: { id: input.variantId },
-            select: { stockQty: true },
-          })
-        : await tx.product.findUniqueOrThrow({
-            where: { id: input.productId },
-            select: { stockQty: true },
-          })
-
-      if (current.stockQty < input.quantity) {
-        throw new InsufficientStockError()
-      }
-
-      const product = await tx.product.findUniqueOrThrow({
-        where: { id: input.productId },
-        select: { costPriceKes: true },
-      })
-
-      if (input.variantId) {
-        await tx.productVariant.update({
-          where: { id: input.variantId },
-          data: { stockQty: { decrement: input.quantity } },
+      for (const item of input.items) {
+        const product = await tx.product.findUniqueOrThrow({
+          where: { id: item.productId },
+          select: { name: true, stockQty: true, costPriceKes: true },
         })
-      } else {
-        await tx.product.update({
-          where: { id: input.productId },
-          data: { stockQty: { decrement: input.quantity } },
+        const current = item.variantId
+          ? await tx.productVariant.findUniqueOrThrow({
+              where: { id: item.variantId },
+              select: { stockQty: true },
+            })
+          : product
+
+        if (current.stockQty < item.quantity) {
+          throw new InsufficientStockError(product.name)
+        }
+
+        if (item.variantId) {
+          await tx.productVariant.update({
+            where: { id: item.variantId },
+            data: { stockQty: { decrement: item.quantity } },
+          })
+        } else {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stockQty: { decrement: item.quantity } },
+          })
+        }
+
+        await tx.stockMovement.create({
+          data: {
+            productId: item.productId,
+            variantId: item.variantId ?? null,
+            direction: 'OUT',
+            reason: input.reason,
+            quantity: item.quantity,
+            unitPriceKes: item.unitPriceKes ?? null,
+            unitCostKes: product.costPriceKes,
+            counterparty: input.counterparty ?? null,
+            note: input.note ?? null,
+            createdById: input.createdById ?? null,
+            createdAt: input.occurredAt ?? undefined,
+          },
         })
       }
-
-      await tx.stockMovement.create({
-        data: {
-          productId: input.productId,
-          variantId: input.variantId ?? null,
-          direction: 'OUT',
-          reason: input.reason,
-          quantity: input.quantity,
-          unitPriceKes: input.unitPriceKes ?? null,
-          unitCostKes: product.costPriceKes,
-          counterparty: input.counterparty ?? null,
-          note: input.note ?? null,
-          createdById: input.createdById ?? null,
-          createdAt: input.occurredAt ?? undefined,
-        },
-      })
     })
   } catch (err) {
     if (err instanceof InsufficientStockError) {
-      return { success: false, error: 'Not enough stock available for this item.' }
+      return { success: false, error: `Not enough stock available for ${err.message}. Nothing was recorded.` }
     }
     throw err
   }

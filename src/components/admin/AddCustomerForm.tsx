@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { createCustomerAction } from '@/lib/actions/admin-customers'
+import { ProductMultiSelect } from '@/components/admin/ProductMultiSelect'
 
 const inputClass = 'rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10'
 
@@ -11,16 +12,26 @@ export function AddCustomerForm({ products }: { products: CustomerProductOption[
   const formRef = useRef<HTMLFormElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [productIds, setProductIds] = useState<string[]>([])
+  const [quantities, setQuantities] = useState<Record<string, string>>({})
   const [isPending, startTransition] = useTransition()
+
+  const productsById = new Map(products.map((p) => [p.id, p]))
 
   function handleSubmit(formData: FormData) {
     setError(null)
     setSuccess(false)
+    formData.set(
+      'products',
+      JSON.stringify(productIds.map((productId) => ({ productId, quantity: quantities[productId] ?? '' }))),
+    )
     startTransition(async () => {
       const result = await createCustomerAction(formData)
       if (result.success) {
         setSuccess(true)
         formRef.current?.reset()
+        setProductIds([])
+        setQuantities({})
         setTimeout(() => setSuccess(false), 3000)
       } else {
         setError(result.error)
@@ -44,15 +55,32 @@ export function AddCustomerForm({ products }: { products: CustomerProductOption[
         </select>
         <input name="location" placeholder="Location" className={inputClass} />
         <input name="source" placeholder="Source (e.g. Facebook)" className={inputClass} />
-        <select name="productId" defaultValue="" className={inputClass}>
-          <option value="">Product bought…</option>
-          {products.map((product) => (
-            <option key={product.id} value={product.id}>
-              {product.name}
-            </option>
-          ))}
-        </select>
-        <input name="lastQuantity" type="number" min={0} placeholder="Quantity" className={inputClass} />
+        <div className="sm:col-span-2">
+          <ProductMultiSelect
+            options={products}
+            selectedIds={productIds}
+            onChange={setProductIds}
+            placeholder="Products bought — search and select…"
+          />
+        </div>
+        {productIds.length > 0 && (
+          <ul className="grid grid-cols-1 gap-2 sm:col-span-3 sm:grid-cols-3">
+            {productIds.map((id) => (
+              <li key={id} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm">{productsById.get(id)?.name ?? 'Unknown product'}</span>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Qty"
+                  aria-label={`Quantity of ${productsById.get(id)?.name ?? 'product'}`}
+                  value={quantities[id] ?? ''}
+                  onChange={(e) => setQuantities((q) => ({ ...q, [id]: e.target.value }))}
+                  className={`w-20 ${inputClass}`}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
         <input name="lastOrderValueKes" type="number" min={0} placeholder="Order value (KES)" className={inputClass} />
         <input name="notes" placeholder="Notes" className={`sm:col-span-2 ${inputClass}`} />
       </div>

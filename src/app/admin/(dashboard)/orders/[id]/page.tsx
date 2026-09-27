@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { OrderActions } from '@/components/admin/OrderActions'
 import { prisma } from '@/lib/prisma'
 import { formatKes } from '@/lib/money'
+import { formatStoreDateTime } from '@/lib/dates'
 import type { ShippingAddressInput } from '@/lib/orders'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +11,13 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
   const { id } = await params
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { items: true },
+    include: {
+      items: true,
+      statusEvents: {
+        orderBy: { occurredAt: 'desc' },
+        include: { createdBy: { select: { name: true, email: true } } },
+      },
+    },
   })
   if (!order) notFound()
 
@@ -20,7 +27,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">{order.orderNumber}</h1>
-        <span className="text-sm opacity-60">{order.createdAt.toLocaleString('en-KE')}</span>
+        <span className="text-sm opacity-60">{formatStoreDateTime(order.createdAt)}</span>
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
@@ -83,7 +90,31 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             </div>
           </div>
 
-          <OrderActions orderId={order.id} status={order.status} paymentStatus={order.paymentStatus} />
+          <OrderActions
+            key={`${order.status}-${order.statusEvents.length}`}
+            orderId={order.id}
+            status={order.status}
+            paymentStatus={order.paymentStatus}
+          />
+
+          <div className="rounded-lg border border-black/10 p-4 text-sm dark:border-white/10">
+            <p className="mb-3 text-xs font-medium tracking-wide uppercase opacity-70">Status History</p>
+            <ol className="flex flex-col gap-3">
+              {order.statusEvents.map((event) => (
+                <li key={event.id} className="flex flex-col">
+                  <span className="font-medium">{event.status}</span>
+                  <span className="text-xs opacity-60">
+                    {formatStoreDateTime(event.occurredAt)}
+                    {event.createdBy ? ` · by ${event.createdBy.name ?? event.createdBy.email}` : ''}
+                  </span>
+                </li>
+              ))}
+              <li className="flex flex-col">
+                <span className="font-medium">PLACED</span>
+                <span className="text-xs opacity-60">{formatStoreDateTime(order.createdAt)}</span>
+              </li>
+            </ol>
+          </div>
         </div>
       </div>
     </div>

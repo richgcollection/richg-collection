@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth/dal'
 import { prisma } from '@/lib/prisma'
+import { parseStoreDate } from '@/lib/dates'
 import { NON_SALE_OUT_REASONS, recordStockIn, recordStockOut, type StockActionResult } from '@/lib/inventory'
 
 const stockInSchema = z.object({
@@ -45,6 +46,7 @@ const stockOutSchema = z.object({
   unitPriceKes: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
   counterparty: z.string().optional(),
   note: z.string().optional(),
+  date: z.string().min(1, 'Select the date the stock went out.'),
 })
 
 export async function recordStockOutAction(formData: FormData): Promise<StockActionResult> {
@@ -58,12 +60,22 @@ export async function recordStockOutAction(formData: FormData): Promise<StockAct
     unitPriceKes: formData.get('unitPriceKes') || undefined,
     counterparty: formData.get('counterparty') || undefined,
     note: formData.get('note') || undefined,
+    date: formData.get('date') ?? '',
   })
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0].message }
   }
 
-  const result = await recordStockOut({ ...parsed.data, createdById: admin.id })
+  const { date, ...input } = parsed.data
+  const occurredAt = parseStoreDate(date)
+  if (!occurredAt) {
+    return { success: false, error: 'Enter a valid date.' }
+  }
+  if (occurredAt.getTime() > Date.now()) {
+    return { success: false, error: 'Date cannot be in the future.' }
+  }
+
+  const result = await recordStockOut({ ...input, occurredAt, createdById: admin.id })
 
   revalidatePath('/admin/inventory')
   revalidatePath('/admin')

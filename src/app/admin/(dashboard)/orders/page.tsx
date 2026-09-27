@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { formatKes } from '@/lib/money'
+import { formatStoreDate, formatStoreDateTime } from '@/lib/dates'
 import { OrderStatusSelect } from '@/components/admin/OrderStatusSelect'
 import type { OrderStatus } from '@prisma/client'
 
@@ -34,6 +35,7 @@ export default async function AdminOrdersPage({
       status: true,
       paymentStatus: true,
       createdAt: true,
+      statusEvents: { orderBy: { occurredAt: 'desc' }, take: 1, select: { occurredAt: true } },
     },
   })
 
@@ -83,8 +85,11 @@ export default async function AdminOrdersPage({
               </td>
               <td className="py-3">
                 <OrderStatusSelect orderId={order.id} status={order.status} />
+                {order.statusEvents[0] && (
+                  <p className="mt-1 text-xs opacity-60">{formatStoreDateTime(order.statusEvents[0].occurredAt)}</p>
+                )}
               </td>
-              <td className="py-3 opacity-60">{order.createdAt.toLocaleDateString('en-KE')}</td>
+              <td className="py-3 opacity-60">{formatStoreDate(order.createdAt)}</td>
             </tr>
           ))}
           {orders.length === 0 && (

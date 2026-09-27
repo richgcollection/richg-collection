@@ -20,6 +20,55 @@
   color-scheme: dark;
 }
 
+/* Admin analytics chart tokens. Categorical slots are assigned in this fixed
+   order (validated for colorblind separation on both surfaces); dark mode
+   uses its own steps of the same hues rather than an automatic flip. */
+:root {
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-6: #008300;
+  --viz-7: #4a3aa7;
+  --viz-8: #e34948;
+  --viz-seq-0: #eef3fa;
+  --viz-seq-1: #b7d3f6;
+  --viz-seq-2: #6da7ec;
+  --viz-seq-3: #2a78d6;
+  --viz-seq-4: #184f95;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-muted: #898781;
+  --viz-ink-2: #52514e;
+  --viz-good: #006300;
+  --viz-bad: #d03b3b;
+  --viz-warn: #b87800;
+}
+
+.dark {
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-6: #008300;
+  --viz-7: #9085e9;
+  --viz-8: #e66767;
+  --viz-seq-0: #22262d;
+  --viz-seq-1: #184f95;
+  --viz-seq-2: #256abf;
+  --viz-seq-3: #3987e5;
+  --viz-seq-4: #86b6ef;
+  --viz-grid: #2c2c2a;
+  --viz-axis: #383835;
+  --viz-muted: #898781;
+  --viz-ink-2: #c3c2b7;
+  --viz-good: #0ca30c;
+  --viz-bad: #e66767;
+  --viz-warn: #fab219;
+}
+
 /* Without an explicit background/text color, browsers render native <select>
    dropdown popups using the OS light theme regardless of page theme — the
    `color-scheme` above fixes most of that, but Windows Chrome still defaults

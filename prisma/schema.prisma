@@ -57,6 +57,7 @@ model User {
   orders         Order[]
   cart           Cart?
   stockMovements StockMovement[]
+  statusEvents   OrderStatusEvent[]
 }
 
 model Address {
@@ -231,6 +232,8 @@ model Order {
   orderNumber     String          @unique
   userId          String?
   user            User?           @relation(fields: [userId], references: [id])
+  customerId      String?
+  customer        Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
   guestEmail      String?
   guestPhone      String?
   status          OrderStatus     @default(PENDING)
@@ -243,11 +246,27 @@ model Order {
   billingAddress  Json?
   items           OrderItem[]
   stockMovements  StockMovement[]
+  statusEvents    OrderStatusEvent[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
   @@index([userId])
+  @@index([customerId])
   @@index([status])
+}
+
+/// One row per fulfillment status change. `occurredAt` is set by the admin (e.g. the actual delivery date); `createdAt` is when it was recorded.
+model OrderStatusEvent {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status      OrderStatus
+  occurredAt  DateTime
+  createdById String?
+  createdBy   User?       @relation(fields: [createdById], references: [id])
+  createdAt   DateTime    @default(now())
+
+  @@index([orderId, occurredAt])
 }
 
 model OrderItem {
@@ -309,6 +328,7 @@ model Customer {
   totalOrders       Int      @default(0)
   totalSpentKes     Int      @default(0)
   notes             String?  @db.Text
+  orders            Order[]
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

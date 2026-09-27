@@ -1,5 +1,6 @@
 import 'server-only'
 import { prisma } from '@/lib/prisma'
+import { kesToUsd } from '@/lib/money'
 
 /** Normalizes Kenyan phone numbers to `2547XXXXXXXX` / `2541XXXXXXXX` so the same person's number matches across checkouts and manual entry. */
 export function normalizePhone(raw: string | null | undefined): string | null {
@@ -72,7 +73,7 @@ function normalizeGenderForMeta(raw: string | null | undefined): string {
   return ''
 }
 
-const META_AUDIENCE_HEADERS = ['email', 'phone', 'fn', 'ln', 'ct', 'country', 'gen'] as const
+const META_AUDIENCE_HEADERS = ['email', 'phone', 'fn', 'ln', 'ct', 'country', 'gen', 'value'] as const
 
 export type MetaAudienceCustomer = {
   email: string | null
@@ -81,9 +82,15 @@ export type MetaAudienceCustomer = {
   lastName: string | null
   location: string | null
   gender: string | null
+  totalSpentKes: number
 }
 
-/** Builds a CSV in Meta's Custom Audience "customer list" column schema (email,phone,fn,ln,ct,country,gen). Meta hashes/normalizes these plain values itself on upload. */
+/**
+ * Builds a CSV in Meta's Custom Audience "customer list" column schema
+ * (email,phone,fn,ln,ct,country,gen,value). Meta hashes/normalizes these plain
+ * values itself on upload. `value` is lifetime spend in USD, for value-based
+ * lookalike audiences.
+ */
 export function toMetaAudienceCsv(customers: MetaAudienceCustomer[]): string {
   const lines = [META_AUDIENCE_HEADERS.join(',')]
   for (const customer of customers) {
@@ -95,6 +102,7 @@ export function toMetaAudienceCsv(customers: MetaAudienceCustomer[]): string {
       (customer.location ?? '').trim().toLowerCase(),
       'ke',
       normalizeGenderForMeta(customer.gender),
+      kesToUsd(customer.totalSpentKes).toFixed(2),
     ]
     lines.push(row.map(csvEscape).join(','))
   }

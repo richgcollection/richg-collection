@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth/dal'
 import { prisma } from '@/lib/prisma'
 import { applyOrderStockOut } from '@/lib/inventory'
+import { parseStoreDateTime } from '@/lib/dates'
 import type { ActionResult } from '@/lib/actions/cart'
 
 const FULFILLMENT_STATUSES = [
@@ -20,23 +21,44 @@ const FULFILLMENT_STATUSES = [
 const statusSchema = z.object({
   orderId: z.string().min(1),
   status: z.enum(FULFILLMENT_STATUSES),
+  /** Store-local `YYYY-MM-DDTHH:mm` for when the change actually happened (e.g. delivery). Omitted → now. */
+  occurredAt: z.string().optional(),
 })
 
 export async function updateOrderStatusAction(formData: FormData): Promise<ActionResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const parsed = statusSchema.safeParse({
     orderId: formData.get('orderId'),
     status: formData.get('status'),
+    occurredAt: formData.get('occurredAt') || undefined,
   })
   if (!parsed.success) {
     return { success: false, error: 'Invalid status update.' }
   }
 
-  await prisma.order.update({
-    where: { id: parsed.data.orderId },
-    data: { status: parsed.data.status },
-  })
+  let occurredAt = new Date()
+  if (parsed.data.occurredAt) {
+    const date = parseStoreDateTime(parsed.data.occurredAt)
+    if (!date) return { success: false, error: 'Enter a valid date and time.' }
+    if (date.getTime() > Date.now()) return { success: false, error: 'Date cannot be in the future.' }
+    occurredAt = date
+  }
+
+  await prisma.$transaction([
+    prisma.order.update({
+      where: { id: parsed.data.orderId },
+      data: { status: parsed.data.status },
+    }),
+    prisma.orderStatusEvent.create({
+      data: {
+        orderId: parsed.data.orderId,
+        status: parsed.data.status,
+        occurredAt,
+        createdById: admin.id,
+      },
+    }),
+  ])
 
   revalidatePath(`/admin/orders/${parsed.data.orderId}`)
   revalidatePath('/admin/orders')
@@ -50,7 +72,7 @@ export async function updateOrderStatusAction(formData: FormData): Promise<Actio
  * against double-processing the same order twice.
  */
 export async function markOrderPaidAction(orderId: string): Promise<ActionResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const order = await prisma.order.findUnique({ where: { id: orderId } })
   if (!order) return { success: false, error: 'Order not found.' }
@@ -60,6 +82,9 @@ export async function markOrderPaidAction(orderId: string): Promise<ActionResult
     await tx.order.update({
       where: { id: orderId },
       data: { paymentStatus: 'PAID', status: 'PROCESSING' },
+    })
+    await tx.orderStatusEvent.create({
+      data: { orderId, status: 'PROCESSING', occurredAt: new Date(), createdById: admin.id },
     })
 
     await applyOrderStockOut(tx, orderId)

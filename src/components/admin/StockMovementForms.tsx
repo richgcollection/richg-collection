@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { recordStockInAction, recordStockOutAction } from '@/lib/actions/admin-inventory'
+import { todayInStoreTz } from '@/lib/dates'
 
 export type InventoryProductOption = {
   id: string
@@ -20,6 +21,7 @@ const OUT_REASONS = [
 const inputClass = 'rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10'
 
 export function StockMovementForms({ products }: { products: InventoryProductOption[] }) {
+  const [today] = useState(() => todayInStoreTz())
   const [inProductId, setInProductId] = useState('')
   const [outProductId, setOutProductId] = useState('')
   const [inError, setInError] = useState<string | null>(null)
@@ -151,6 +153,10 @@ export function StockMovementForms({ products }: { products: InventoryProductOpt
               className={inputClass}
             />
           </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs opacity-70">Date</span>
+            <input name="date" type="date" required defaultValue={today} max={today} className={inputClass} />
+          </label>
           <input name="counterparty" placeholder="Customer / influencer (optional)" className={inputClass} />
           <input name="note" placeholder="Note (optional)" className={inputClass} />
           <button

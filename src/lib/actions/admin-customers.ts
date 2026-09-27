@@ -15,7 +15,7 @@ const customerSchema = z.object({
   gender: z.string().optional(),
   location: z.string().optional(),
   source: z.string().optional(),
-  lastProduct: z.string().optional(),
+  productId: z.string().optional(),
   lastQuantity: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
   lastOrderValueKes: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
   notes: z.string().optional(),
@@ -33,7 +33,7 @@ export async function createCustomerAction(formData: FormData): Promise<ActionRe
     gender: formData.get('gender') || undefined,
     location: formData.get('location') || undefined,
     source: formData.get('source') || undefined,
-    lastProduct: formData.get('lastProduct') || undefined,
+    productId: formData.get('productId') || undefined,
     lastQuantity: formData.get('lastQuantity') || undefined,
     lastOrderValueKes: formData.get('lastOrderValueKes') || undefined,
     notes: formData.get('notes') || undefined,
@@ -45,6 +45,18 @@ export async function createCustomerAction(formData: FormData): Promise<ActionRe
   const phone = normalizePhone(parsed.data.phone)
   if (!phone && !parsed.data.email) {
     return { success: false, error: 'Enter at least a phone number or email.' }
+  }
+
+  let lastProduct: string | null = null
+  if (parsed.data.productId) {
+    const product = await prisma.product.findUnique({
+      where: { id: parsed.data.productId },
+      select: { name: true },
+    })
+    if (!product) {
+      return { success: false, error: 'Selected product no longer exists.' }
+    }
+    lastProduct = product.name
   }
 
   if (phone) {
@@ -63,7 +75,7 @@ export async function createCustomerAction(formData: FormData): Promise<ActionRe
       gender: parsed.data.gender || null,
       location: parsed.data.location || null,
       source: parsed.data.source || 'Manual',
-      lastProduct: parsed.data.lastProduct || null,
+      lastProduct,
       lastQuantity: parsed.data.lastQuantity ?? null,
       lastOrderValueKes: parsed.data.lastOrderValueKes ?? null,
       notes: parsed.data.notes || null,

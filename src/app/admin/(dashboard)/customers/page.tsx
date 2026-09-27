@@ -1,9 +1,13 @@
 import { prisma } from '@/lib/prisma'
 import { formatKes } from '@/lib/money'
+import { formatStoreDateTime } from '@/lib/dates'
 import { AddCustomerForm } from '@/components/admin/AddCustomerForm'
 import { CustomerDeleteButton } from '@/components/admin/CustomerDeleteButton'
+import { CustomerRow, type CustomerPurchase } from '@/components/admin/CustomerRow'
 
 export const dynamic = 'force-dynamic'
+
+const COLUMN_COUNT = 10
 
 export default async function AdminCustomersPage({
   searchParams,
@@ -13,20 +17,43 @@ export default async function AdminCustomersPage({
   const { q } = await searchParams
   const query = q?.trim()
 
-  const customers = await prisma.customer.findMany({
-    where: query
-      ? {
-          OR: [
-            { firstName: { contains: query, mode: 'insensitive' } },
-            { lastName: { contains: query, mode: 'insensitive' } },
-            { phone: { contains: query } },
-            { email: { contains: query, mode: 'insensitive' } },
-          ],
-        }
-      : undefined,
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-  })
+  const [customers, products] = await Promise.all([
+    prisma.customer.findMany({
+      where: query
+        ? {
+            OR: [
+              { firstName: { contains: query, mode: 'insensitive' } },
+              { lastName: { contains: query, mode: 'insensitive' } },
+              { phone: { contains: query } },
+              { email: { contains: query, mode: 'insensitive' } },
+            ],
+          }
+        : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: {
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            orderNumber: true,
+            paymentStatus: true,
+            createdAt: true,
+            items: {
+              select: {
+                id: true,
+                nameSnapshot: true,
+                variantSnapshot: true,
+                quantity: true,
+                lineTotalKes: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.product.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+  ])
 
   return (
     <div>
@@ -41,7 +68,7 @@ export default async function AdminCustomersPage({
       </div>
 
       <div className="mt-6">
-        <AddCustomerForm />
+        <AddCustomerForm products={products} />
       </div>
 
       <form method="GET" className="mt-8 flex gap-2">
@@ -62,6 +89,7 @@ export default async function AdminCustomersPage({
       <table className="mt-6 w-full text-sm">
         <thead>
           <tr className="border-b border-black/10 text-left opacity-60 dark:border-white/10">
+            <th className="w-6 py-2" />
             <th className="py-2">Name</th>
             <th className="py-2">Phone</th>
             <th className="py-2">Email</th>
@@ -73,32 +101,71 @@ export default async function AdminCustomersPage({
             <th className="py-2" />
           </tr>
         </thead>
-        <tbody>
-          {customers.map((customer) => (
-            <tr key={customer.id} className="border-b border-black/5 dark:border-white/5">
-              <td className="py-3 font-medium">
-                {customer.firstName} {customer.lastName ?? ''}
-              </td>
-              <td className="py-3 opacity-80">{customer.phone ?? '—'}</td>
-              <td className="py-3 opacity-80">{customer.email ?? '—'}</td>
-              <td className="py-3 opacity-80">{customer.location ?? '—'}</td>
-              <td className="py-3 opacity-80">{customer.source}</td>
-              <td className="py-3 opacity-80">{customer.lastProduct ?? '—'}</td>
-              <td className="py-3">{customer.totalOrders}</td>
-              <td className="py-3">{formatKes(customer.totalSpentKes)}</td>
-              <td className="py-3">
-                <CustomerDeleteButton customerId={customer.id} />
-              </td>
-            </tr>
-          ))}
-          {customers.length === 0 && (
+        {customers.map((customer) => {
+          const purchases: CustomerPurchase[] = customer.orders.flatMap((order) =>
+            order.items.map((item) => ({
+              key: item.id,
+              productName: item.nameSnapshot,
+              variantLabel: item.variantSnapshot,
+              quantity: item.quantity,
+              amount: formatKes(item.lineTotalKes),
+              purchasedAt: formatStoreDateTime(order.createdAt),
+              channel: 'Website',
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              paymentStatus: order.paymentStatus,
+            })),
+          )
+          // Manually added leads have no Order rows — show what was recorded on the form.
+          if (customer.source !== 'Website' && customer.lastProduct && customer.orders.length === 0) {
+            purchases.push({
+              key: `manual-${customer.id}`,
+              productName: customer.lastProduct,
+              variantLabel: null,
+              quantity: customer.lastQuantity,
+              amount: customer.lastOrderValueKes != null ? formatKes(customer.lastOrderValueKes) : null,
+              purchasedAt: formatStoreDateTime(customer.createdAt),
+              channel: customer.source,
+              orderId: null,
+              orderNumber: null,
+              paymentStatus: null,
+            })
+          }
+
+          return (
+            <CustomerRow
+              key={customer.id}
+              purchases={purchases}
+              columnCount={COLUMN_COUNT}
+              cells={
+                <>
+                  <td className="py-3 font-medium">
+                    {customer.firstName} {customer.lastName ?? ''}
+                  </td>
+                  <td className="py-3 opacity-80">{customer.phone ?? '—'}</td>
+                  <td className="py-3 opacity-80">{customer.email ?? '—'}</td>
+                  <td className="py-3 opacity-80">{customer.location ?? '—'}</td>
+                  <td className="py-3 opacity-80">{customer.source}</td>
+                  <td className="py-3 opacity-80">{customer.lastProduct ?? '—'}</td>
+                  <td className="py-3">{customer.totalOrders}</td>
+                  <td className="py-3">{formatKes(customer.totalSpentKes)}</td>
+                  <td className="py-3">
+                    <CustomerDeleteButton customerId={customer.id} />
+                  </td>
+                </>
+              }
+            />
+          )
+        })}
+        {customers.length === 0 && (
+          <tbody>
             <tr>
-              <td colSpan={9} className="py-8 text-center opacity-60">
+              <td colSpan={COLUMN_COUNT} className="py-8 text-center opacity-60">
                 No customers yet.
               </td>
             </tr>
-          )}
-        </tbody>
+          </tbody>
+        )}
       </table>
     </div>
   )

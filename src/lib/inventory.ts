@@ -111,6 +111,8 @@ export async function recordStockOut(input: {
   counterparty?: string | null
   note?: string | null
   createdById?: string | null
+  /** When the stock actually left (defaults to now). Stored as the movement's `createdAt` so history and profit ranges use it. */
+  occurredAt?: Date | null
 }): Promise<StockActionResult> {
   if (input.quantity <= 0) {
     return { success: false, error: 'Quantity must be greater than zero.' }
@@ -161,6 +163,7 @@ export async function recordStockOut(input: {
           counterparty: input.counterparty ?? null,
           note: input.note ?? null,
           createdById: input.createdById ?? null,
+          createdAt: input.occurredAt ?? undefined,
         },
       })
     })

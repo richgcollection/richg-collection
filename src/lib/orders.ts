@@ -26,9 +26,20 @@ export async function createPendingOrder(
   const subtotalKes = cart.subtotalKes
   const totalKes = subtotalKes + shippingKes
 
-  const order = await prisma.order.create({
+  const customer = await upsertCustomerFromOrder({
+    fullName: shippingAddress.fullName,
+    phone: shippingAddress.phone,
+    email: shippingAddress.email,
+    town: shippingAddress.town,
+    productName: cart.items.map((item) => item.productName).join(', '),
+    quantity: cart.items.reduce((sum, item) => sum + item.quantity, 0),
+    orderValueKes: totalKes,
+  })
+
+  return prisma.order.create({
     data: {
       orderNumber,
+      customerId: customer?.id,
       paymentRef: orderNumber,
       guestEmail: shippingAddress.email,
       guestPhone: shippingAddress.phone,
@@ -49,16 +60,4 @@ export async function createPendingOrder(
       },
     },
   })
-
-  await upsertCustomerFromOrder({
-    fullName: shippingAddress.fullName,
-    phone: shippingAddress.phone,
-    email: shippingAddress.email,
-    town: shippingAddress.town,
-    productName: cart.items.map((item) => item.productName).join(', '),
-    quantity: cart.items.reduce((sum, item) => sum + item.quantity, 0),
-    orderValueKes: totalKes,
-  })
-
-  return order
 }

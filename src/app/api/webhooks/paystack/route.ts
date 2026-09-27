@@ -48,6 +48,9 @@ export async function POST(request: Request) {
       where: { id: order.id },
       data: { paymentStatus: 'PAID', status: 'PROCESSING' },
     })
+    await tx.orderStatusEvent.create({
+      data: { orderId: order.id, status: 'PROCESSING', occurredAt: new Date() },
+    })
 
     await applyOrderStockOut(tx, order.id)
   })

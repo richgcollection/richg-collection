@@ -5,7 +5,9 @@ import { createCustomerAction } from '@/lib/actions/admin-customers'
 
 const inputClass = 'rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10'
 
-export function AddCustomerForm() {
+export type CustomerProductOption = { id: string; name: string }
+
+export function AddCustomerForm({ products }: { products: CustomerProductOption[] }) {
   const formRef = useRef<HTMLFormElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -42,7 +44,14 @@ export function AddCustomerForm() {
         </select>
         <input name="location" placeholder="Location" className={inputClass} />
         <input name="source" placeholder="Source (e.g. Facebook)" className={inputClass} />
-        <input name="lastProduct" placeholder="Product bought" className={inputClass} />
+        <select name="productId" defaultValue="" className={inputClass}>
+          <option value="">Product bought…</option>
+          {products.map((product) => (
+            <option key={product.id} value={product.id}>
+              {product.name}
+            </option>
+          ))}
+        </select>
         <input name="lastQuantity" type="number" min={0} placeholder="Quantity" className={inputClass} />
         <input name="lastOrderValueKes" type="number" min={0} placeholder="Order value (KES)" className={inputClass} />
         <input name="notes" placeholder="Notes" className={`sm:col-span-2 ${inputClass}`} />

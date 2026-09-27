@@ -7,7 +7,7 @@ export async function GET() {
 
   const customers = await prisma.customer.findMany({
     orderBy: { createdAt: 'desc' },
-    select: { email: true, phone: true, firstName: true, lastName: true, location: true, gender: true },
+    select: { email: true, phone: true, firstName: true, lastName: true, location: true, gender: true, totalSpentKes: true },
   })
 
   const csv = toMetaAudienceCsv(customers)

@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { createCustomerAction } from '@/lib/actions/admin-customers'
 import { ProductMultiSelect } from '@/components/admin/ProductMultiSelect'
+import { CUSTOMER_SOURCES, OTHER_SOURCE } from '@/lib/customer-sources'
 
 const inputClass = 'rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10'
 
@@ -14,6 +15,7 @@ export function AddCustomerForm({ products }: { products: CustomerProductOption[
   const [success, setSuccess] = useState(false)
   const [productIds, setProductIds] = useState<string[]>([])
   const [quantities, setQuantities] = useState<Record<string, string>>({})
+  const [source, setSource] = useState('')
   const [isPending, startTransition] = useTransition()
 
   const productsById = new Map(products.map((p) => [p.id, p]))
@@ -32,6 +34,7 @@ export function AddCustomerForm({ products }: { products: CustomerProductOption[
         formRef.current?.reset()
         setProductIds([])
         setQuantities({})
+        setSource('')
         setTimeout(() => setSuccess(false), 3000)
       } else {
         setError(result.error)
@@ -54,7 +57,32 @@ export function AddCustomerForm({ products }: { products: CustomerProductOption[
           <option value="Female">Female</option>
         </select>
         <input name="location" placeholder="Location" className={inputClass} />
-        <input name="source" placeholder="Source (e.g. Facebook)" className={inputClass} />
+        <select
+          name="source"
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          aria-label="Source"
+          className={inputClass}
+        >
+          <option value="">Source</option>
+          {CUSTOMER_SOURCES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+          <option value={OTHER_SOURCE}>Other…</option>
+        </select>
+        {source === OTHER_SOURCE && (
+          <input
+            name="sourceOther"
+            required
+            maxLength={60}
+            autoFocus
+            placeholder="Specify source (e.g. Walk-in)"
+            aria-label="Other source"
+            className={inputClass}
+          />
+        )}
         <div className="sm:col-span-2">
           <ProductMultiSelect
             options={products}

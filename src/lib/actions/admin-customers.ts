@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth/dal'
 import { prisma } from '@/lib/prisma'
 import { normalizePhone } from '@/lib/customers'
+import { CUSTOMER_SOURCES, OTHER_SOURCE } from '@/lib/customer-sources'
 import type { ActionResult } from '@/lib/actions/cart'
 
 const customerSchema = z.object({
@@ -59,6 +60,15 @@ export async function createCustomerAction(formData: FormData): Promise<ActionRe
     return { success: false, error: 'Enter at least a phone number or email.' }
   }
 
+  // Dropdown value, or the free text typed under "Other".
+  let source: string | undefined = parsed.data.source
+  if (source === OTHER_SOURCE) {
+    source = String(formData.get('sourceOther') ?? '').trim().slice(0, 60)
+    if (!source) return { success: false, error: 'Specify where this customer came from.' }
+  } else if (source && !(CUSTOMER_SOURCES as readonly string[]).includes(source)) {
+    return { success: false, error: 'Choose a source from the list.' }
+  }
+
   let lastProduct: string | null = null
   let lastQuantity: number | null = null
   const picked = parsed.data.products
@@ -97,7 +107,7 @@ export async function createCustomerAction(formData: FormData): Promise<ActionRe
       email: parsed.data.email || null,
       gender: parsed.data.gender || null,
       location: parsed.data.location || null,
-      source: parsed.data.source || 'Manual',
+      source: source || 'Manual',
       lastProduct,
       lastQuantity,
       lastOrderValueKes: parsed.data.lastOrderValueKes ?? null,

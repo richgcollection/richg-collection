@@ -268,7 +268,7 @@ function summarize(rows: LedgerRow[]): Kpis {
 
 function sizeOf(m: LedgerRow): string | null {
   const ov = m.variant?.optionValues.find((v) => /size/i.test(v.optionValue.option.name))
-  return ov ? ov.optionValue.value.toUpperCase().replace(/s*,s*/g, ' / ') : null
+  return ov ? ov.optionValue.value.toUpperCase().replace(/\s*,\s*/g, ' / ') : null
 }
 
 const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', 'XXL', '3XL', '4XL', '5XL']

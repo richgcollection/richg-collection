@@ -10,6 +10,12 @@ export type InventoryProductOption = {
   variants: { id: string; label: string }[]
 }
 
+export type InventoryCustomerOption = {
+  id: string
+  name: string
+  phone: string | null
+}
+
 const OUT_REASONS = [
   { value: 'MANUAL_SALE', label: 'Manual / In-Person Sale' },
   { value: 'DAMAGE', label: 'Damage' },
@@ -20,7 +26,13 @@ const OUT_REASONS = [
 
 const inputClass = 'rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10'
 
-export function StockMovementForms({ products }: { products: InventoryProductOption[] }) {
+export function StockMovementForms({
+  products,
+  customers,
+}: {
+  products: InventoryProductOption[]
+  customers: InventoryCustomerOption[]
+}) {
   const [today] = useState(() => todayInStoreTz())
   const [inProductId, setInProductId] = useState('')
   const [outProductId, setOutProductId] = useState('')
@@ -157,7 +169,20 @@ export function StockMovementForms({ products }: { products: InventoryProductOpt
             <span className="text-xs opacity-70">Date</span>
             <input name="date" type="date" required defaultValue={today} max={today} className={inputClass} />
           </label>
-          <input name="counterparty" placeholder="Customer / influencer (optional)" className={inputClass} />
+          <input
+            name="counterparty"
+            list="stock-out-customers"
+            autoComplete="off"
+            placeholder="Search customer, or type a name (optional)"
+            className={inputClass}
+          />
+          <datalist id="stock-out-customers">
+            {customers.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.phone ?? ''}
+              </option>
+            ))}
+          </datalist>
           <input name="note" placeholder="Note (optional)" className={inputClass} />
           <button
             type="submit"

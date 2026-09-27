@@ -18,7 +18,7 @@ const COMPACT = new Intl.NumberFormat('en-KE', { notation: 'compact', maximumFra
 export function fmt(value: number, format: ValueFormat, compact = false): string {
   switch (format) {
     case 'kes':
-      return `KES ${compact ? COMPACT.format(value) : NUM.format(value)}`
+      return `Ksh ${compact ? COMPACT.format(value) : NUM.format(value)}`
     case 'pct':
       return `${NUM1.format(value)}%`
     case 'units':
@@ -53,11 +53,16 @@ function niceMax(v: number): number {
   return nice * exp
 }
 
-function ticks(min: number, max: number, count = 4): number[] {
-  const out: number[] = []
-  const step = (max - min) / count
-  for (let i = 0; i <= count; i++) out.push(min + step * i)
-  return out
+/** A y-scale whose ticks land on round numbers and always include zero. */
+function niceScale(min: number, max: number, count = 4) {
+  const lo = Math.min(0, min)
+  const hi = Math.max(0, max)
+  const step = niceMax((hi - lo || 1) / count)
+  const yMin = lo < 0 ? -Math.ceil(-lo / step) * step : 0
+  const yMax = Math.max(step, Math.ceil(hi / step) * step)
+  const ticks: number[] = []
+  for (let t = yMin; t <= yMax + step / 2; t += step) ticks.push(Math.round(t * 1e6) / 1e6)
+  return { yMin, yMax, ticks }
 }
 
 /** Path for a bar with 4px rounded corners on its data end only (square at the baseline). */
@@ -238,10 +243,7 @@ export function LineChart({
     return series.map((s) => s.values.map((v, i) => (acc[i] += v)))
   }, [series, stackedArea, n])
 
-  const rawMin = Math.min(0, ...stacked.flat())
-  const rawMax = Math.max(0, ...stacked.flat())
-  const yMax = niceMax(rawMax)
-  const yMin = rawMin < 0 ? -niceMax(-rawMin) : 0
+  const { yMin, yMax, ticks: yTicks } = niceScale(Math.min(...stacked.flat()), Math.max(...stacked.flat()))
   const x = (i: number) => m.l + (n <= 1 ? pw / 2 : (i * pw) / (n - 1))
   const y = (v: number) => m.t + ph - ((v - yMin) / (yMax - yMin || 1)) * ph
 
@@ -261,7 +263,7 @@ export function LineChart({
     <div ref={ref} className="relative w-full">
       {width > 0 && (
         <svg width={width} height={height} role="img" aria-label={series.map((s) => s.label).join(', ')}>
-          {ticks(yMin, yMax).map((t) => (
+          {yTicks.map((t) => (
             <g key={t}>
               <line x1={m.l} x2={width - m.r} y1={y(t)} y2={y(t)} stroke={t === 0 ? 'var(--viz-axis)' : 'var(--viz-grid)'} strokeWidth={1} />
               <text x={m.l - 8} y={y(t)} dy="0.32em" textAnchor="end" className="fill-[var(--viz-muted)] text-[10px] tabular-nums">
@@ -271,7 +273,7 @@ export function LineChart({
           ))}
           {labels.map((l, i) =>
             i % labelEvery === 0 ? (
-              <text key={i} x={x(i)} y={height - 8} textAnchor="middle" className="fill-[var(--viz-muted)] text-[10px]">
+              <text key={i} x={x(i)} y={height - 8} textAnchor={i === 0 && n > 1 ? "start" : i === n - 1 && n > 1 ? "end" : "middle"} className="fill-[var(--viz-muted)] text-[10px]">
                 {l}
               </text>
             ) : null,
@@ -367,21 +369,20 @@ export function ColumnChart({
 
   const pos = labels.map((_, i) => series.reduce((s, se) => s + Math.max(0, se.values[i]), 0))
   const neg = labels.map((_, i) => series.reduce((s, se) => s + Math.min(0, se.values[i]), 0))
-  const yMax = niceMax(Math.max(0, ...pos))
-  const minNeg = Math.min(0, ...neg)
-  const yMin = minNeg < 0 ? -niceMax(-minNeg) : 0
+  const { yMin, yMax, ticks: yTicks } = niceScale(Math.min(...neg), Math.max(...pos))
   const y = (v: number) => m.t + ph - ((v - yMin) / (yMax - yMin || 1)) * ph
   const band = n > 0 ? pw / n : 0
   const bw = Math.max(2, Math.min(24, band * 0.7))
   const bx = (i: number) => m.l + band * i + (band - bw) / 2
-  const labelEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / 56))))
+  // Short categorical axes (sizes, weekdays, bands) always show every label.
+  const labelEvery = n <= 8 ? 1 : Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / 44))))
   const peak = pos.indexOf(Math.max(...pos))
 
   return (
     <div ref={ref} className="relative w-full">
       {width > 0 && (
         <svg width={width} height={height} role="img" aria-label={series.map((s) => s.label).join(', ')}>
-          {ticks(yMin, yMax, yMin < 0 ? 4 : 4).map((t) => (
+          {yTicks.map((t) => (
             <g key={t}>
               <line x1={m.l} x2={width - m.r} y1={y(t)} y2={y(t)} stroke={Math.abs(t) < 1e-9 ? 'var(--viz-axis)' : 'var(--viz-grid)'} strokeWidth={1} />
               <text x={m.l - 8} y={y(t)} dy="0.32em" textAnchor="end" className="fill-[var(--viz-muted)] text-[10px] tabular-nums">
@@ -500,7 +501,8 @@ export function HBarChart({
       {items.map((it, i) => (
         <li
           key={it.name + i}
-          className="grid grid-cols-[minmax(0,9rem)_1fr] items-center gap-3 text-xs sm:grid-cols-[minmax(0,12rem)_1fr]"
+          className="grid items-center gap-3 text-xs"
+          style={{ gridTemplateColumns: 'minmax(0, 40%) minmax(0, 1fr) auto' }}
           onPointerEnter={() => setHover(i)}
           onPointerLeave={() => setHover(null)}
           title={
@@ -510,24 +512,24 @@ export function HBarChart({
           }
         >
           <span className="truncate text-[var(--viz-ink-2)]">{it.name}</span>
-          <span className="flex items-center gap-2">
+          <span className="block">
             <span
-              className="h-3.5 rounded-r transition-opacity"
+              className="block h-3.5 rounded-r transition-opacity"
               style={{
-                width: `${Math.max(0.5, (it.value / max) * 78)}%`,
+                width: `${Math.max(0.5, (it.value / max) * 100)}%`,
                 background: color,
                 opacity: hover === null || hover === i ? 1 : 0.55,
               }}
             />
-            <span className="shrink-0 font-medium tabular-nums">
-              {fmt(it.value, format, true)}
-              {secondaryFormat && it.secondary !== undefined && (
-                <span className="ml-1.5 font-normal text-[var(--viz-muted)]">
-                  {fmt(it.secondary, secondaryFormat, true)}
-                  {secondaryLabel ? ` ${secondaryLabel}` : ''}
-                </span>
-              )}
-            </span>
+          </span>
+          <span className="text-right font-medium tabular-nums">
+            {fmt(it.value, format, true)}
+            {secondaryFormat && it.secondary !== undefined && (
+              <span className="ml-1.5 font-normal text-[var(--viz-muted)]">
+                {fmt(it.secondary, secondaryFormat, true)}
+                {secondaryLabel ? ` ${secondaryLabel}` : ''}
+              </span>
+            )}
           </span>
         </li>
       ))}
@@ -565,7 +567,8 @@ export function DonutChart({
     const end = a0 + sweep - gapAngle / 2
     if (it.value <= 0 || end <= start) return { d: '', i }
     const large = end - start > Math.PI ? 1 : 0
-    const p = (rad: number, a: number) => `${r + rad * Math.cos(a)},${r + rad * Math.sin(a)}`
+    // Rounded so server and client trig results serialize identically (avoids hydration mismatches).
+    const p = (rad: number, a: number) => `${(r + rad * Math.cos(a)).toFixed(2)},${(r + rad * Math.sin(a)).toFixed(2)}`
     const full = sweep >= Math.PI * 2 - 1e-6
     const d = full
       ? `M${r},0A${r},${r} 0 1 1 ${r},${2 * r}A${r},${r} 0 1 1 ${r},0ZM${r},${r - inner}A${inner},${inner} 0 1 0 ${r},${r + inner}A${inner},${inner} 0 1 0 ${r},${r - inner}Z`
@@ -727,8 +730,10 @@ export function ScatterChart({
   const m = { l: 52, r: 16, t: 12, b: 36 }
   const pw = Math.max(0, width - m.l - m.r)
   const ph = height - m.t - m.b
-  const xMax = niceMax(Math.max(0, ...points.map((p) => p.x)))
-  const yMax = niceMax(Math.max(0, ...points.map((p) => p.y)))
+  const xs = niceScale(0, Math.max(...points.map((p) => p.x)))
+  const ys = niceScale(0, Math.max(...points.map((p) => p.y)))
+  const xMax = xs.yMax
+  const yMax = ys.yMax
   const sx = (v: number) => m.l + (v / xMax) * pw
   const sy = (v: number) => m.t + ph - (v / yMax) * ph
   const median = (arr: number[]) => {
@@ -743,7 +748,7 @@ export function ScatterChart({
     <div ref={ref} className="relative w-full">
       {width > 0 && (
         <svg width={width} height={height} role="img" aria-label={`${yLabel} vs ${xLabel}`}>
-          {ticks(0, yMax).map((t) => (
+          {ys.ticks.map((t) => (
             <g key={`y${t}`}>
               <line x1={m.l} x2={width - m.r} y1={sy(t)} y2={sy(t)} stroke={t === 0 ? 'var(--viz-axis)' : 'var(--viz-grid)'} />
               <text x={m.l - 8} y={sy(t)} dy="0.32em" textAnchor="end" className="fill-[var(--viz-muted)] text-[10px] tabular-nums">
@@ -751,7 +756,7 @@ export function ScatterChart({
               </text>
             </g>
           ))}
-          {ticks(0, xMax).map((t) => (
+          {xs.ticks.map((t) => (
             <text key={`x${t}`} x={sx(t)} y={m.t + ph + 16} textAnchor="middle" className="fill-[var(--viz-muted)] text-[10px] tabular-nums">
               {fmt(t, xFormat, true)}
             </text>
@@ -772,9 +777,6 @@ export function ScatterChart({
           </text>
           <text x={width - m.r - 6} y={m.t + ph - 6} textAnchor="end" className="fill-[var(--viz-muted)] text-[10px]">
             Restock risk
-          </text>
-          <text x={m.l + 6} y={m.t + ph - 6} className="fill-[var(--viz-muted)] text-[10px]">
-            Low activity
           </text>
           {points.map((p, i) => (
             <g key={p.label + i}>

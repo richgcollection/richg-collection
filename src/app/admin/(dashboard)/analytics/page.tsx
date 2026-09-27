@@ -246,6 +246,12 @@ export default async function AdminAnalyticsPage({
           upIsGood={false}
           hint={`${n0.format(kpis.giveawayUnits)} units at cost`}
         />
+
+        <StatTile
+          label="Open carts"
+          value={formatKes(a.openCarts.valueKes)}
+          hint={`${a.openCarts.count} carts · ${a.openCarts.units} units not yet checked out`}
+        />
       </div>
 
       {/* ---------------------------------------------------------------- money over time */}
@@ -642,7 +648,7 @@ function Pill({ href, active, children }: { href: string; active: boolean; child
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="-mb-4 border-t border-black/10 pt-6 dark:border-white/10">
+    <div className="border-t border-black/10 pt-6 dark:border-white/10">
       <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
       {subtitle && <p className="text-xs text-[var(--viz-ink-2)]">{subtitle}</p>}
     </div>

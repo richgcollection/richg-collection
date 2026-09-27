@@ -31,7 +31,7 @@ export default async function AdminInventoryPage({
   const activeReason = reason && isStockMovementReason(reason) ? reason : undefined
   const needsReview = review === '1'
 
-  const [summary, profit, movements, products, reviewCount] = await Promise.all([
+  const [summary, profit, movements, products, reviewCount, customers] = await Promise.all([
     getStockSummary(),
     getProfitSummary(),
     listStockMovements({ reason: activeReason, needsReview }),
@@ -51,7 +51,17 @@ export default async function AdminInventoryPage({
       },
     }),
     prisma.stockMovement.count({ where: { note: { startsWith: NEEDS_REVIEW_PREFIX } } }),
+    prisma.customer.findMany({
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      select: { id: true, firstName: true, lastName: true, phone: true },
+    }),
   ])
+
+  const customerOptions = customers.map((c) => ({
+    id: c.id,
+    name: [c.firstName, c.lastName].filter(Boolean).join(' '),
+    phone: c.phone,
+  }))
 
   const productOptions = products.map((p) => ({
     id: p.id,
@@ -78,7 +88,7 @@ export default async function AdminInventoryPage({
       </div>
 
       <div className="mt-8">
-        <StockMovementForms products={productOptions} />
+        <StockMovementForms products={productOptions} customers={customerOptions} />
       </div>
 
       <div className="mt-8">

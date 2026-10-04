@@ -69,7 +69,11 @@ export function MetaPixel() {
 }
 
 /** Fire a standard Meta Pixel event from a Client Component. No-op if the pixel isn't configured/loaded. */
-export function trackMetaPixelEvent(event: string, params?: Record<string, unknown>) {
+export function trackMetaPixelEvent(event: string, params?: Record<string, unknown>, eventId?: string) {
   if (typeof window === 'undefined' || !window.fbq) return
-  window.fbq('track', event, params)
+  if (eventId) {
+    window.fbq('track', event, params, { eventID: eventId })
+  } else {
+    window.fbq('track', event, params)
+  }
 }

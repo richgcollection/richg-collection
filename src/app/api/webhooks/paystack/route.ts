@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { verifyWebhookSignature } from '@/lib/paystack'
-import { applyOrderStockOut } from '@/lib/inventory'
+import { markOrderPaid } from '@/lib/orders'
 
 type PaystackChargeEvent = {
   event: string
@@ -43,17 +43,7 @@ export async function POST(request: Request) {
     return new Response('Amount mismatch', { status: 400 })
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.order.update({
-      where: { id: order.id },
-      data: { paymentStatus: 'PAID', status: 'PROCESSING' },
-    })
-    await tx.orderStatusEvent.create({
-      data: { orderId: order.id, status: 'PROCESSING', occurredAt: new Date() },
-    })
-
-    await applyOrderStockOut(tx, order.id)
-  })
+  await markOrderPaid(order.id)
 
   return Response.json({ received: true })
 }

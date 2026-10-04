@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { TrackEvent } from '@/components/analytics/TrackEvent'
+import { markOrderPaid } from '@/lib/orders'
 import { prisma } from '@/lib/prisma'
 import { isPaystackConfigured, verifyTransaction } from '@/lib/paystack'
 
@@ -24,12 +25,10 @@ export default async function CheckoutSuccessPage({
   if (order.paymentStatus !== 'PAID' && (params.reference || params.trxref) && (await isPaystackConfigured())) {
     try {
       const verification = await verifyTransaction(orderNumber)
-      if (verification.data.status === 'success') {
-        order = await prisma.order.update({
-          where: { id: order.id },
-          data: { paymentStatus: 'PAID', status: 'PROCESSING' },
-          include: { items: true },
-        })
+      // Same amount check as the webhook, which skips orders already marked paid.
+      if (verification.data.status === 'success' && verification.data.amount === Math.round(order.totalKes * 100)) {
+        await markOrderPaid(order.id)
+        order = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: { items: true } })
       }
     } catch {
       // Fall through and show the "processing" state — the webhook will catch up.
@@ -42,6 +41,7 @@ export default async function CheckoutSuccessPage({
         <>
           <TrackEvent
             event="Purchase"
+            eventId={order.orderNumber}
             params={{
               value: order.totalKes,
               currency: 'KES',

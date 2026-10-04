@@ -1,6 +1,9 @@
+import { after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import type { Cart } from '@/lib/cart'
 import { upsertCustomerFromOrder } from '@/lib/customers'
+import { applyOrderStockOut } from '@/lib/inventory'
+import { sendMetaPurchaseEvent } from '@/lib/meta-capi'
 
 export function generateOrderNumber(): string {
   const year = new Date().getFullYear()
@@ -60,4 +63,33 @@ export async function createPendingOrder(
       },
     },
   })
+}
+
+/**
+ * Marks an order paid, records the PROCESSING status event and deducts stock,
+ * then reports the Purchase to Meta. Shared by the Paystack webhook, the
+ * checkout success page (which can confirm payment before the webhook lands)
+ * and the admin "mark as paid" action. Returns false if the order was already
+ * paid — the conditional update makes concurrent callers safe, so stock is
+ * only ever deducted once.
+ */
+export async function markOrderPaid(orderId: string, createdById?: string): Promise<boolean> {
+  const transitioned = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.order.updateMany({
+      where: { id: orderId, paymentStatus: { not: 'PAID' } },
+      data: { paymentStatus: 'PAID', status: 'PROCESSING' },
+    })
+    if (count === 0) return false
+
+    await tx.orderStatusEvent.create({
+      data: { orderId, status: 'PROCESSING', occurredAt: new Date(), createdById },
+    })
+    await applyOrderStockOut(tx, orderId)
+    return true
+  })
+
+  if (transitioned) {
+    after(() => sendMetaPurchaseEvent(orderId))
+  }
+  return transitioned
 }

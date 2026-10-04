@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth/dal'
 import { prisma } from '@/lib/prisma'
-import { applyOrderStockOut } from '@/lib/inventory'
+import { markOrderPaid } from '@/lib/orders'
 import { parseStoreDateTime } from '@/lib/dates'
 import type { ActionResult } from '@/lib/actions/cart'
 
@@ -78,17 +78,9 @@ export async function markOrderPaidAction(orderId: string): Promise<ActionResult
   if (!order) return { success: false, error: 'Order not found.' }
   if (order.paymentStatus === 'PAID') return { success: false, error: 'Already marked as paid.' }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.order.update({
-      where: { id: orderId },
-      data: { paymentStatus: 'PAID', status: 'PROCESSING' },
-    })
-    await tx.orderStatusEvent.create({
-      data: { orderId, status: 'PROCESSING', occurredAt: new Date(), createdById: admin.id },
-    })
-
-    await applyOrderStockOut(tx, orderId)
-  })
+  if (!(await markOrderPaid(orderId, admin.id))) {
+    return { success: false, error: 'Already marked as paid.' }
+  }
 
   revalidatePath(`/admin/orders/${orderId}`)
   revalidatePath('/admin/orders')

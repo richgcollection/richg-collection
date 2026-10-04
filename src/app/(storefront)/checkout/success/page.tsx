@@ -15,7 +15,7 @@ export default async function CheckoutSuccessPage({
   const orderNumber = params.reference ?? params.trxref ?? params.order
   if (!orderNumber) notFound()
 
-  let order = await prisma.order.findUnique({ where: { orderNumber } })
+  let order = await prisma.order.findUnique({ where: { orderNumber }, include: { items: true } })
   if (!order) notFound()
 
   // The redirect back from Paystack can arrive before the webhook does —
@@ -28,6 +28,7 @@ export default async function CheckoutSuccessPage({
         order = await prisma.order.update({
           where: { id: order.id },
           data: { paymentStatus: 'PAID', status: 'PROCESSING' },
+          include: { items: true },
         })
       }
     } catch {
@@ -41,7 +42,20 @@ export default async function CheckoutSuccessPage({
         <>
           <TrackEvent
             event="Purchase"
-            params={{ value: order.totalKes, currency: 'KES', content_ids: [order.orderNumber] }}
+            params={{
+              value: order.totalKes,
+              currency: 'KES',
+              // Product IDs (not the order number) so Meta can match the purchase to catalog items.
+              content_ids: [...new Set(order.items.map((item) => item.productId))],
+              content_type: 'product',
+              contents: order.items.map((item) => ({
+                id: item.productId,
+                quantity: item.quantity,
+                item_price: item.unitPriceKes,
+              })),
+              num_items: order.items.reduce((sum, item) => sum + item.quantity, 0),
+              order_id: order.orderNumber,
+            }}
           />
           <h1 className="text-3xl font-semibold tracking-tight">Thank you for your order!</h1>
           <p className="mt-4 opacity-70">

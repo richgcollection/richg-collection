@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { ProductForm } from '@/components/admin/ProductForm'
 import { VariantStockEditor } from '@/components/admin/VariantStockEditor'
 import { prisma } from '@/lib/prisma'
+import { sortVariantsBySize } from '@/lib/sizes'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +25,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
 
   if (!product) notFound()
 
-  const variantRows = product.variants.map((variant) => ({
+  const variantRows = sortVariantsBySize(product.variants).map((variant) => ({
     id: variant.id,
     sizeLabel: variant.optionValues.map((ov) => ov.optionValue.value).join(' / ') || 'No options',
     stockQty: variant.stockQty,

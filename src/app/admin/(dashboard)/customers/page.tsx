@@ -5,7 +5,8 @@ import { AddCustomerForm } from '@/components/admin/AddCustomerForm'
 import { CustomerDeleteButton } from '@/components/admin/CustomerDeleteButton'
 import { CustomerRow, type CustomerPurchase } from '@/components/admin/CustomerRow'
 import { CustomerPhoneEditor } from '@/components/admin/CustomerPhoneEditor'
-import { getLifetimeSpendByCustomer } from '@/lib/customers'
+import { CustomerEditButton } from '@/components/admin/CustomerEditButton'
+import { getLedgerByCustomer } from '@/lib/customers'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,7 @@ export default async function AdminCustomersPage({
   const query = q?.trim()
   const missingPhone = missing === 'phone'
 
-  const [customers, products, ledgerSpend, missingPhoneCount] = await Promise.all([
+  const [customers, products, ledger, missingPhoneCount] = await Promise.all([
     prisma.customer.findMany({
       where: {
         ...(missingPhone ? { phone: null } : {}),
@@ -59,7 +60,7 @@ export default async function AdminCustomersPage({
       },
     }),
     prisma.product.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-    getLifetimeSpendByCustomer(),
+    getLedgerByCustomer(),
     prisma.customer.count({ where: { phone: null } }),
   ])
 
@@ -128,6 +129,7 @@ export default async function AdminCustomersPage({
               variantLabel: item.variantSnapshot,
               quantity: item.quantity,
               amount: formatKes(item.lineTotalKes),
+              discount: null,
               purchasedAt: formatStoreDateTime(order.createdAt),
               channel: 'Website',
               orderId: order.id,
@@ -135,16 +137,19 @@ export default async function AdminCustomersPage({
               paymentStatus: order.paymentStatus,
             })),
           )
-          // Manually added leads have no Order rows — show what was recorded on the form.
-          if (customer.source !== 'Website' && customer.lastProduct && customer.orders.length === 0) {
+          // Sales recorded under Inventory → Stock Out (online sales already appear above as orders).
+          const customerLedger = ledger.get(customer.id)
+          for (const sale of customerLedger?.sales ?? []) {
+            if (sale.reason !== 'MANUAL_SALE') continue
             purchases.push({
-              key: `manual-${customer.id}`,
-              productName: customer.lastProduct,
-              variantLabel: null,
-              quantity: customer.lastQuantity,
-              amount: customer.lastOrderValueKes != null ? formatKes(customer.lastOrderValueKes) : null,
-              purchasedAt: formatStoreDateTime(customer.createdAt),
-              channel: customer.source,
+              key: sale.id,
+              productName: sale.productName,
+              variantLabel: sale.variantLabel,
+              quantity: sale.quantity,
+              amount: sale.unitPriceKes != null ? formatKes(sale.valueKes) : null,
+              discount: sale.discountKes ? formatKes(sale.discountKes) : null,
+              purchasedAt: formatStoreDateTime(sale.createdAt),
+              channel: 'Stock out',
               orderId: null,
               orderNumber: null,
               paymentStatus: null,
@@ -170,9 +175,24 @@ export default async function AdminCustomersPage({
                   <td className="py-3 opacity-80">{customer.lastProduct ?? '—'}</td>
                   <td className="py-3">{customer.totalOrders}</td>
                   {/* Same figure the Meta CSV exports: the sales ledger, with the checkout counter as a fallback. */}
-                  <td className="py-3">{formatKes(Math.max(ledgerSpend.get(customer.id) ?? 0, customer.totalSpentKes))}</td>
+                  <td className="py-3">{formatKes(Math.max(customerLedger?.spendKes ?? 0, customer.totalSpentKes))}</td>
                   <td className="py-3">
-                    <CustomerDeleteButton customerId={customer.id} />
+                    <div className="flex items-start justify-end gap-3">
+                      <CustomerEditButton
+                        customer={{
+                          id: customer.id,
+                          firstName: customer.firstName,
+                          lastName: customer.lastName,
+                          phone: customer.phone,
+                          email: customer.email,
+                          gender: customer.gender,
+                          location: customer.location,
+                          source: customer.source,
+                          notes: customer.notes,
+                        }}
+                      />
+                      <CustomerDeleteButton customerId={customer.id} />
+                    </div>
                   </td>
                 </>
               }

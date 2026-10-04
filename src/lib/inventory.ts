@@ -1,6 +1,7 @@
 import 'server-only'
 import type { Prisma, StockDirection, StockMovementReason } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { sortVariantsBySize } from '@/lib/sizes'
 
 export const DEFAULT_LOW_STOCK_THRESHOLD = 5
 
@@ -9,6 +10,11 @@ export function effectiveLowStockThreshold(product: { lowStockThreshold: number 
 }
 
 type TxClient = Prisma.TransactionClient
+
+/** Money actually received for a sale line: price × quantity, less any discount given on the line. */
+export function saleRevenueKes(m: { unitPriceKes: number | null; quantity: number; discountKes?: number | null }): number {
+  return Math.max(0, (m.unitPriceKes ?? 0) * m.quantity - (m.discountKes ?? 0))
+}
 
 /**
  * Decrements stock for a paid order and records one ONLINE_SALE StockMovement
@@ -107,6 +113,8 @@ export type StockOutItem = {
   variantId?: string | null
   quantity: number
   unitPriceKes?: number | null
+  /** Total discount on the line, in KES. */
+  discountKes?: number | null
 }
 
 /**
@@ -128,6 +136,12 @@ export async function recordStockOut(input: {
   }
   if (input.items.some((item) => item.quantity <= 0)) {
     return { success: false, error: 'Quantity must be greater than zero.' }
+  }
+  if (input.items.some((item) => item.discountKes && item.unitPriceKes == null)) {
+    return { success: false, error: 'Enter the price per unit for lines with a discount.' }
+  }
+  if (input.items.some((item) => (item.discountKes ?? 0) > (item.unitPriceKes ?? 0) * item.quantity)) {
+    return { success: false, error: 'A discount cannot be more than the line total.' }
   }
 
   try {
@@ -168,6 +182,7 @@ export async function recordStockOut(input: {
             reason: input.reason,
             quantity: item.quantity,
             unitPriceKes: item.unitPriceKes ?? null,
+            discountKes: item.discountKes || null,
             unitCostKes: product.costPriceKes,
             counterparty: input.counterparty ?? null,
             note: input.note ?? null,
@@ -226,7 +241,7 @@ export async function getStockSummary(): Promise<StockSummaryRow[]> {
   for (const product of products) {
     const threshold = effectiveLowStockThreshold(product)
     if (product.variants.length > 0) {
-      for (const variant of product.variants) {
+      for (const variant of sortVariantsBySize(product.variants)) {
         rows.push({
           productId: product.id,
           productName: product.name,
@@ -271,6 +286,7 @@ export async function getProfitSummary(range?: { from?: Date; to?: Date }): Prom
     select: {
       quantity: true,
       unitPriceKes: true,
+      discountKes: true,
       unitCostKes: true,
       product: { select: { categories: { select: { category: { select: { id: true, name: true } } } } } },
     },
@@ -281,7 +297,7 @@ export async function getProfitSummary(range?: { from?: Date; to?: Date }): Prom
   const byCategoryMap = new Map<string, { categoryName: string; revenueKes: number; profitKes: number }>()
 
   for (const m of movements) {
-    const revenue = (m.unitPriceKes ?? 0) * m.quantity
+    const revenue = saleRevenueKes(m)
     const cost = (m.unitCostKes ?? 0) * m.quantity
     revenueKes += revenue
     costKes += cost

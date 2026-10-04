@@ -9,6 +9,8 @@ export type CustomerPurchase = {
   variantLabel: string | null
   quantity: number | null
   amount: string | null
+  /** Discount given on the line, pre-formatted. */
+  discount: string | null
   /** Pre-formatted on the server in store time. */
   purchasedAt: string
   channel: string
@@ -58,6 +60,7 @@ export function CustomerRow({
                     <th className="p-2">Product</th>
                     <th className="p-2">Qty</th>
                     <th className="p-2">Amount</th>
+                    <th className="p-2">Discount</th>
                     <th className="p-2">Channel</th>
                     <th className="p-2">Order</th>
                   </tr>
@@ -72,6 +75,7 @@ export function CustomerRow({
                       </td>
                       <td className="p-2">{p.quantity ?? '—'}</td>
                       <td className="p-2">{p.amount ?? '—'}</td>
+                      <td className="p-2">{p.discount ?? '—'}</td>
                       <td className="p-2">{p.channel}</td>
                       <td className="p-2">
                         {p.orderId ? (

@@ -46,6 +46,12 @@ const stockOutItemSchema = z.object({
     .transform((v) => v || undefined),
   quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1.'),
   unitPriceKes: z.coerce.number().int().min(0).optional().or(z.literal('').transform(() => undefined)),
+  discountKes: z.coerce
+    .number()
+    .int()
+    .min(0, 'Discount cannot be negative.')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
 })
 
 const stockOutSchema = z.object({
@@ -117,5 +123,48 @@ export async function updateStockMovementNoteAction(formData: FormData): Promise
   })
 
   revalidatePath('/admin/inventory')
+  return { success: true }
+}
+
+const movementDiscountSchema = z.object({
+  movementId: z.string().min(1),
+  discountKes: z.coerce.number().int().min(0, 'Discount cannot be negative.'),
+})
+
+/** Sets the discount given on a recorded stock-out line (0 clears it). Stock levels are not touched. */
+export async function updateStockMovementDiscountAction(formData: FormData): Promise<StockActionResult> {
+  await requireAdmin()
+
+  const parsed = movementDiscountSchema.safeParse({
+    movementId: formData.get('movementId'),
+    discountKes: formData.get('discountKes') || 0,
+  })
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message }
+  }
+
+  const movement = await prisma.stockMovement.findUnique({
+    where: { id: parsed.data.movementId },
+    select: { direction: true, quantity: true, unitPriceKes: true },
+  })
+  if (!movement || movement.direction !== 'OUT') {
+    return { success: false, error: 'Discounts can only be recorded on stock-out records.' }
+  }
+  if (parsed.data.discountKes > 0 && movement.unitPriceKes == null) {
+    return { success: false, error: 'This record has no sale price, so it cannot have a discount.' }
+  }
+  if (parsed.data.discountKes > (movement.unitPriceKes ?? 0) * movement.quantity) {
+    return { success: false, error: 'A discount cannot be more than the line total.' }
+  }
+
+  await prisma.stockMovement.update({
+    where: { id: parsed.data.movementId },
+    data: { discountKes: parsed.data.discountKes || null },
+  })
+
+  revalidatePath('/admin/inventory')
+  revalidatePath('/admin/customers')
+  revalidatePath('/admin/analytics')
+  revalidatePath('/admin')
   return { success: true }
 }

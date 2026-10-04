@@ -297,6 +297,8 @@ model StockMovement {
   quantity     Int
   unitCostKes  Int?
   unitPriceKes Int?
+  /// Total discount on this line in KES (not per unit). Revenue = unitPriceKes × quantity − discountKes.
+  discountKes  Int?
   supplier     String?
   counterparty String?
   note         String?             @db.Text

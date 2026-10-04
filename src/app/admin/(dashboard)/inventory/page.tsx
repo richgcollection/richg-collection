@@ -4,6 +4,8 @@ import { formatKes } from '@/lib/money'
 import { getStockSummary, getProfitSummary, listStockMovements, NEEDS_REVIEW_PREFIX } from '@/lib/inventory'
 import { StockMovementForms } from '@/components/admin/StockMovementForms'
 import { MovementNoteEditor } from '@/components/admin/MovementNoteEditor'
+import { MovementDiscountEditor } from '@/components/admin/MovementDiscountEditor'
+import { sortVariantsBySize } from '@/lib/sizes'
 import type { StockMovementReason } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -66,7 +68,7 @@ export default async function AdminInventoryPage({
   const productOptions = products.map((p) => ({
     id: p.id,
     name: p.name,
-    variants: p.variants.map((v) => ({
+    variants: sortVariantsBySize(p.variants).map((v) => ({
       id: v.id,
       label:
         v.optionValues.map((ov) => `${ov.optionValue.option.name}: ${ov.optionValue.value}`).join(' / ') ||
@@ -169,6 +171,8 @@ export default async function AdminInventoryPage({
               <th className="py-2">Direction</th>
               <th className="py-2">Reason</th>
               <th className="py-2">Qty</th>
+              <th className="py-2">Price / unit</th>
+              <th className="py-2">Discount</th>
               <th className="py-2">Party</th>
               <th className="py-2">Note</th>
             </tr>
@@ -188,6 +192,14 @@ export default async function AdminInventoryPage({
                   <td className="py-2">{m.direction}</td>
                   <td className="py-2">{REASON_LABELS[m.reason]}</td>
                   <td className="py-2">{m.quantity}</td>
+                  <td className="py-2 opacity-70">{m.unitPriceKes != null ? formatKes(m.unitPriceKes) : '—'}</td>
+                  <td className="py-2">
+                    {m.direction === 'OUT' && m.unitPriceKes != null ? (
+                      <MovementDiscountEditor movementId={m.id} discountKes={m.discountKes} />
+                    ) : (
+                      <span className="opacity-70">—</span>
+                    )}
+                  </td>
                   <td className="py-2 opacity-70">{m.counterparty ?? m.supplier ?? '—'}</td>
                   <td className="py-2">
                     <MovementNoteEditor movementId={m.id} note={m.note} />
@@ -197,7 +209,7 @@ export default async function AdminInventoryPage({
             })}
             {movements.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center opacity-60">
+                <td colSpan={9} className="py-8 text-center opacity-60">
                   No stock movements yet.
                 </td>
               </tr>

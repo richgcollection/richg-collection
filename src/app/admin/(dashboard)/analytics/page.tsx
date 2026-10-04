@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { formatKes } from '@/lib/money'
-import { DEFAULT_RANGE, getAnalytics, RANGE_PRESETS, type Granularity, type RangeKey } from '@/lib/analytics'
+import { DEFAULT_RANGE, getAnalytics, MONTH_NAMES, RANGE_PRESETS, type Granularity, type RangeKey } from '@/lib/analytics'
 import {
   CalendarHeatmap,
   ChartCard,
@@ -48,24 +48,36 @@ function delta(cur: number, prev: number | undefined): number | null {
 export default async function AdminAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; g?: string }>
+  searchParams: Promise<{ range?: string; g?: string; year?: string; month?: string }>
 }) {
-  const { range, g } = await searchParams
+  const { range, g, year, month } = await searchParams
   const rangeKey: RangeKey = range && range in RANGE_PRESETS ? (range as RangeKey) : DEFAULT_RANGE
   const granularity = GRANULARITIES.some((x) => x.value === g) ? (g as Granularity) : undefined
+  const yearNum = /^d{4}$/.test(year ?? '') ? Number(year) : undefined
+  const monthNum = yearNum && /^(0?[1-9]|1[0-2])$/.test(month ?? '') ? Number(month) : undefined
 
-  const a = await getAnalytics({ range: rangeKey, granularity })
+  const a = await getAnalytics({ range: rangeKey, granularity, year: yearNum, month: monthNum })
   const { kpis, prevKpis: prev, series } = a
   const labels = series.map((b) => b.label)
-  const href = (next: { range?: string; g?: string }) => {
+  const cal = a.range.calendar
+  /** Picking a rolling range clears the year/month, and picking a year/month replaces the range. */
+  const href = (next: { range?: string; g?: string; year?: number; month?: number | null }) => {
     const p = new URLSearchParams()
-    const r = next.range ?? rangeKey
-    if (r !== DEFAULT_RANGE) p.set('range', r)
+    const nextYear = 'range' in next ? undefined : 'year' in next ? next.year : cal?.year
+    const nextMonth = 'range' in next || 'year' in next ? next.month ?? undefined : cal?.month ?? undefined
+    if (nextYear) {
+      p.set('year', String(nextYear))
+      if (nextMonth) p.set('month', String(nextMonth))
+    } else {
+      const r = next.range ?? rangeKey
+      if (r !== DEFAULT_RANGE) p.set('range', r)
+    }
     const gg = 'g' in next ? next.g : granularity
     if (gg) p.set('g', gg)
     const s = p.toString()
     return `/admin/analytics${s ? `?${s}` : ''}`
   }
+
 
   const lastSaleDay = [...a.daily].reverse().find((d) => d.units > 0)?.date
   const periodWord = { day: 'day', week: 'week', month: 'month' }[a.granularity]
@@ -105,6 +117,7 @@ export default async function AdminAnalyticsPage({
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Analytics &amp; Insights</h1>
             <p className="mt-1 text-sm text-[var(--viz-ink-2)]">
+              {cal && <span className="font-medium text-foreground">{a.range.label} · </span>}
               {new Date(a.range.from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} –{' '}
               {new Date(new Date(a.range.to).getTime() - 1).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
               {' · '}
@@ -120,8 +133,14 @@ export default async function AdminAnalyticsPage({
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {(Object.entries(RANGE_PRESETS) as Array<[RangeKey, (typeof RANGE_PRESETS)[RangeKey]]>).map(([key, p]) => (
-            <Pill key={key} href={href({ range: key })} active={rangeKey === key}>
+            <Pill key={key} href={href({ range: key })} active={!cal && rangeKey === key}>
               {p.label}
+            </Pill>
+          ))}
+          <span className="mx-2 h-5 w-px bg-black/10 dark:bg-white/10" aria-hidden />
+          {a.availableYears.map((y) => (
+            <Pill key={y} href={href({ year: y, month: null })} active={cal?.year === y && !cal.month}>
+              {y}
             </Pill>
           ))}
           <span className="mx-2 h-5 w-px bg-black/10 dark:bg-white/10" aria-hidden />
@@ -134,6 +153,19 @@ export default async function AdminAnalyticsPage({
             </Pill>
           ))}
         </div>
+        {cal && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[var(--viz-ink-2)]">Month in {cal.year}:</span>
+            <Pill href={href({ year: cal.year, month: null })} active={!cal.month}>
+              Whole year
+            </Pill>
+            {cal.months.map((m) => (
+              <Pill key={m} href={href({ year: cal.year, month: m })} active={cal.month === m}>
+                {MONTH_NAMES[m - 1].slice(0, 3)}
+              </Pill>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ---------------------------------------------------------------- insights */}
@@ -143,7 +175,7 @@ export default async function AdminAnalyticsPage({
             prev &&
             prev.revenueKes > 0 && {
               tone: kpis.revenueKes >= prev.revenueKes ? 'good' : 'bad',
-              text: `Revenue is ${kpis.revenueKes >= prev.revenueKes ? 'up' : 'down'} ${Math.abs(delta(kpis.revenueKes, prev.revenueKes) ?? 0).toFixed(0)}% on the previous ${a.range.days} days (${formatKes(prev.revenueKes)} → ${formatKes(kpis.revenueKes)}).`,
+              text: `Revenue is ${kpis.revenueKes >= prev.revenueKes ? 'up' : 'down'} ${Math.abs(delta(kpis.revenueKes, prev.revenueKes) ?? 0).toFixed(0)}% on ${a.range.comparisonLabel} (${formatKes(prev.revenueKes)} → ${formatKes(kpis.revenueKes)}).`,
             },
           topByRevenue[0] && {
             tone: 'info',

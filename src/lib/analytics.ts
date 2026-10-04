@@ -1,7 +1,8 @@
 import 'server-only'
 import type { OrderStatus, StockMovementReason } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { effectiveLowStockThreshold } from '@/lib/inventory'
+import { effectiveLowStockThreshold, saleRevenueKes } from '@/lib/inventory'
+import { compareSizes } from '@/lib/sizes'
 
 /**
  * Admin analytics. Sales are read from the stock ledger (ONLINE_SALE +
@@ -148,7 +149,19 @@ export type ProductVelocity = {
 export type Named = { name: string; value: number; secondary?: number }
 
 export type Analytics = {
-  range: { key: RangeKey; label: string; from: string; to: string; days: number }
+  range: {
+    key: RangeKey
+    label: string
+    from: string
+    to: string
+    days: number
+    /** Set when a calendar year (and optionally month) is selected instead of a rolling range. */
+    calendar: { year: number; month: number | null; /** 1–12, months of that year that have started. */ months: number[] } | null
+    /** What the "previous" KPI figures cover, e.g. "the previous 90 days". */
+    comparisonLabel: string
+  }
+  /** Calendar years with stock records, newest first. */
+  availableYears: number[]
   granularity: Granularity
   kpis: Kpis
   prevKpis: Kpis | null
@@ -212,6 +225,7 @@ function loadLedger(from: Date | undefined, to: Date) {
       quantity: true,
       unitCostKes: true,
       unitPriceKes: true,
+      discountKes: true,
       counterparty: true,
       createdAt: true,
       order: { select: { guestEmail: true } },
@@ -246,7 +260,7 @@ function summarize(rows: LedgerRow[]): Kpis {
       k.unitsIn += m.quantity
       k.restockSpendKes += (m.unitCostKes ?? 0) * m.quantity
     } else if (isSale(m)) {
-      const revenue = (m.unitPriceKes ?? 0) * m.quantity
+      const revenue = saleRevenueKes(m)
       k.revenueKes += revenue
       k.profitKes += revenue - unitCost(m) * m.quantity
       k.unitsSold += m.quantity
@@ -271,19 +285,6 @@ function sizeOf(m: LedgerRow): string | null {
   return ov ? ov.optionValue.value.toUpperCase().replace(/\s*,\s*/g, ' / ') : null
 }
 
-const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', 'XXL', '3XL', '4XL', '5XL']
-function compareSizes(a: string, b: string) {
-  const ia = SIZE_ORDER.indexOf(a)
-  const ib = SIZE_ORDER.indexOf(b)
-  if (ia !== -1 && ib !== -1) return ia - ib
-  if (ia !== -1) return -1
-  if (ib !== -1) return 1
-  const na = Number(a)
-  const nb = Number(b)
-  if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb
-  return a.localeCompare(b)
-}
-
 function classify(p: { unitsSold: number; stockQty: number; daysOfCover: number | null }): VelocityClass {
   if (p.unitsSold === 0) return 'dead'
   if (p.stockQty <= 0) return 'stockout'
@@ -295,25 +296,70 @@ function classify(p: { unitsSold: number; stockQty: number; daysOfCover: number 
 
 // ---------------------------------------------------------------- main
 
-export async function getAnalytics(opts: { range: RangeKey; granularity?: Granularity }): Promise<Analytics> {
+export const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** Start of a calendar month in Kenya time; `month` is 0-based and may overflow into the next/previous year. */
+const startOfEatMonth = (year: number, month: number) => fromEat(new Date(Date.UTC(year, month, 1)))
+
+export async function getAnalytics(opts: {
+  range: RangeKey
+  granularity?: Granularity
+  /** Calendar year (Kenya time). Takes precedence over `range`. */
+  year?: number
+  /** 1–12, only with `year`. */
+  month?: number
+}): Promise<Analytics> {
   const now = new Date()
-  const to = new Date(startOfEatDay(now).getTime() + DAY_MS) // end of today, exclusive
+  const endOfToday = new Date(startOfEatDay(now).getTime() + DAY_MS) // exclusive
   const preset = RANGE_PRESETS[opts.range]
+  const first = await prisma.stockMovement.aggregate({ _min: { createdAt: true } })
+  const firstYear = toEat(first._min.createdAt ?? now).getUTCFullYear()
+  const currentYear = toEat(now).getUTCFullYear()
+  const availableYears = Array.from({ length: currentYear - firstYear + 1 }, (_, i) => currentYear - i)
 
   let from: Date
-  if (preset.days === null) {
-    const first = await prisma.stockMovement.aggregate({ _min: { createdAt: true } })
+  let to = endOfToday
+  let prevFrom: Date | null
+  let prevTo: Date
+  let label: string = preset.label
+  let comparisonLabel: string
+  // A year/month that hasn't started yet falls back to the rolling range.
+  const calendar =
+    opts.year && startOfEatMonth(opts.year, (opts.month ?? 1) - 1) < endOfToday
+      ? {
+          year: opts.year,
+          month: opts.month ?? null,
+          months: Array.from({ length: 12 }, (_, i) => i + 1).filter((m) => startOfEatMonth(opts.year!, m - 1) < endOfToday),
+        }
+      : null
+
+  if (calendar) {
+    const { year, month } = calendar
+    from = month ? startOfEatMonth(year, month - 1) : startOfEatMonth(year, 0)
+    const periodEnd = month ? startOfEatMonth(year, month) : startOfEatMonth(year + 1, 0)
+    to = periodEnd < endOfToday ? periodEnd : endOfToday // the current month/year runs to today
+    // Compare with the same stretch of the previous month/year (e.g. 1–4 Oct vs 1–4 Sep).
+    prevFrom = month ? startOfEatMonth(year, month - 2) : startOfEatMonth(year - 1, 0)
+    prevTo = new Date(Math.min(from.getTime(), prevFrom.getTime() + (to.getTime() - from.getTime())))
+    label = month ? `${MONTH_NAMES[month - 1]} ${year}` : String(year)
+    comparisonLabel = month ? `the same days of ${MONTH_NAMES[(month + 10) % 12]}` : `the same stretch of ${year - 1}`
+  } else if (preset.days === null) {
     from = startOfEatDay(first._min.createdAt ?? new Date(to.getTime() - 30 * DAY_MS))
+    prevFrom = null
+    prevTo = from
+    comparisonLabel = ''
   } else {
     from = new Date(to.getTime() - preset.days * DAY_MS)
+    prevFrom = new Date(from.getTime() - preset.days * DAY_MS)
+    prevTo = from
+    comparisonLabel = `the previous ${preset.days} days`
   }
   const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / DAY_MS))
   const granularity = opts.granularity ?? autoGranularity(days)
-  const prevFrom = preset.days === null ? null : new Date(from.getTime() - preset.days * DAY_MS)
 
   const [ledger, prevLedger, priorBuyerRows, products, customers, orders, carts] = await Promise.all([
     loadLedger(from, to),
-    prevFrom ? loadLedger(prevFrom, from) : Promise.resolve([] as LedgerRow[]),
+    prevFrom ? loadLedger(prevFrom, prevTo) : Promise.resolve([] as LedgerRow[]),
     prisma.stockMovement.findMany({
       where: { createdAt: { lt: from }, direction: 'OUT', reason: { in: SALE_REASONS } },
       select: { counterparty: true, order: { select: { guestEmail: true } } },
@@ -406,7 +452,7 @@ export async function getAnalytics(opts: { range: RangeKey; granularity?: Granul
 
     if (!isSale(m)) continue
 
-    const revenue = (m.unitPriceKes ?? 0) * m.quantity
+    const revenue = saleRevenueKes(m)
     const cost = unitCost(m) * m.quantity
     if (b && bi !== undefined) {
       b.revenueKes += revenue
@@ -607,7 +653,16 @@ export async function getAnalytics(opts: { range: RangeKey; granularity?: Granul
   }
 
   return {
-    range: { key: opts.range, label: preset.label, from: from.toISOString(), to: to.toISOString(), days },
+    range: {
+      key: opts.range,
+      label,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      days,
+      calendar,
+      comparisonLabel,
+    },
+    availableYears,
     granularity,
     kpis: summarize(ledger),
     prevKpis: prevFrom ? summarize(prevLedger) : null,

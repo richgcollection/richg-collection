@@ -33,12 +33,13 @@ type OutLine = {
   variantId: string
   quantity: string
   unitPriceKes: string
+  discountKes: string
 }
 
 let outLineSeq = 0
 function newOutLine(productId: string): OutLine {
   outLineSeq += 1
-  return { key: `line-${outLineSeq}`, productId, variantId: '', quantity: '', unitPriceKes: '' }
+  return { key: `line-${outLineSeq}`, productId, variantId: '', quantity: '', unitPriceKes: '', discountKes: '' }
 }
 
 export function StockMovementForms({
@@ -60,6 +61,14 @@ export function StockMovementForms({
   const productsById = new Map(products.map((p) => [p.id, p]))
   const inVariants = productsById.get(inProductId)?.variants ?? []
   const outProductIds = [...new Set(outLines.map((l) => l.productId))]
+  const outTotals = outLines.reduce(
+    (t, l) => {
+      const gross = (Number(l.unitPriceKes) || 0) * (Number(l.quantity) || 0)
+      const discount = Number(l.discountKes) || 0
+      return { gross: t.gross + gross, discount: t.discount + discount }
+    },
+    { gross: 0, discount: 0 },
+  )
 
   function setOutProducts(ids: string[]) {
     setOutLines((lines) => {
@@ -108,11 +117,12 @@ export function StockMovementForms({
     formData.set(
       'items',
       JSON.stringify(
-        outLines.map(({ productId, variantId, quantity, unitPriceKes }) => ({
+        outLines.map(({ productId, variantId, quantity, unitPriceKes, discountKes }) => ({
           productId,
           variantId,
           quantity,
           unitPriceKes,
+          discountKes,
         })),
       ),
     )
@@ -231,7 +241,7 @@ export function StockMovementForms({
                         ))}
                       </select>
                     )}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                       <input
                         type="number"
                         min={1}
@@ -249,11 +259,31 @@ export function StockMovementForms({
                         onChange={(e) => updateOutLine(line.key, { unitPriceKes: e.target.value })}
                         className={inputClass}
                       />
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Discount (KES, line total)"
+                        aria-label="Discount given on this line, in KES"
+                        value={line.discountKes}
+                        onChange={(e) => updateOutLine(line.key, { discountKes: e.target.value })}
+                        className={inputClass}
+                      />
                     </div>
                   </li>
                 )
               })}
             </ul>
+          )}
+          {outTotals.gross > 0 && (
+            <p className="text-sm">
+              Total: <span className="font-medium">KES {(outTotals.gross - outTotals.discount).toLocaleString('en-KE')}</span>
+              {outTotals.discount > 0 && (
+                <span className="opacity-60">
+                  {' '}
+                  (KES {outTotals.gross.toLocaleString('en-KE')} less KES {outTotals.discount.toLocaleString('en-KE')} discount)
+                </span>
+              )}
+            </p>
           )}
           <select name="reason" required defaultValue="MANUAL_SALE" className={inputClass}>
             {OUT_REASONS.map((r) => (

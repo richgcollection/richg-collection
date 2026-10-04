@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
+import { compareSizes, isSizeOption } from '@/lib/sizes'
 
 export type ProductListItem = {
   id: string
@@ -75,6 +76,26 @@ export async function getFeaturedProducts(limit = 4): Promise<ProductListItem[]>
   })
 
   return products.map(toListItem)
+}
+
+/**
+ * Home-page "New Arrivals" pins, in display order: black and white shirts
+ * first, then black and white T-shirts. Everything else follows, newest first.
+ */
+const NEW_ARRIVAL_PINS: Array<(name: string) => boolean> = [
+  (name) => /\b(black|white)\b/i.test(name) && /\bshirt\b/i.test(name) && !/\bt-?shirt\b/i.test(name),
+  (name) => /\b(black|white)\b/i.test(name) && /\bt-?shirt\b/i.test(name),
+]
+
+function newArrivalRank(name: string): number {
+  const index = NEW_ARRIVAL_PINS.findIndex((matches) => matches(name))
+  return index === -1 ? NEW_ARRIVAL_PINS.length : index
+}
+
+export async function getNewArrivals(limit: number): Promise<ProductListItem[]> {
+  const products = await getProducts({ sort: 'newest' })
+  // Array.prototype.sort is stable, so each group keeps its newest-first order.
+  return products.sort((a, b) => newArrivalRank(a.name) - newArrivalRank(b.name)).slice(0, limit)
 }
 
 export async function getProducts(params: ProductListParams = {}): Promise<ProductListItem[]> {
@@ -231,7 +252,9 @@ export async function getProductBySlug(slug: string) {
     options: product.options.map((option) => ({
       id: option.id,
       name: option.name,
-      values: option.values.map((v) => ({ id: v.id, value: v.value })),
+      values: option.values
+        .map((v) => ({ id: v.id, value: v.value }))
+        .sort((a, b) => (isSizeOption(option.name) ? compareSizes(a.value, b.value) : 0)),
     })),
     variants,
   }

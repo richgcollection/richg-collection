@@ -1,7 +1,7 @@
 'use client'
 
 import Script from 'next/script'
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 
 declare global {
@@ -16,8 +16,14 @@ const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID
 function PixelPageviewTracker() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const isInitialLoad = useRef(true)
 
   useEffect(() => {
+    // The base script already tracks the initial PageView; only track client-side route changes.
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false
+      return
+    }
     if (!PIXEL_ID || !window.fbq) return
     window.fbq('track', 'PageView')
     // Re-fires on every client-side route change (App Router doesn't do full reloads).

@@ -4,7 +4,7 @@ import { CollectionGrid } from '@/components/storefront/CollectionGrid'
 import { FeaturedSlider } from '@/components/storefront/FeaturedSlider'
 import { Hero } from '@/components/storefront/Hero'
 import { ProductGrid } from '@/components/storefront/ProductGrid'
-import { getCollectionCategories, getFeaturedProducts, getProducts } from '@/lib/queries/products'
+import { getCollectionCategories, getFeaturedProducts, getNewArrivals } from '@/lib/queries/products'
 
 // Render at request time rather than statically at build time — the build
 // environment doesn't have database access, only the deployed runtime does.
@@ -14,7 +14,7 @@ export default async function HomePage() {
   const [featuredProducts, collectionCategories, recentProducts] = await Promise.all([
     getFeaturedProducts(8),
     getCollectionCategories(),
-    getProducts({ sort: 'newest', limit: 8 }),
+    getNewArrivals(12),
   ])
 
   return (

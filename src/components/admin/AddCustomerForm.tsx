@@ -109,9 +109,12 @@ export function AddCustomerForm({ products }: { products: CustomerProductOption[
             ))}
           </ul>
         )}
-        <input name="lastOrderValueKes" type="number" min={0} placeholder="Order value (KES)" className={inputClass} />
-        <input name="notes" placeholder="Notes" className={`sm:col-span-2 ${inputClass}`} />
+        <input name="notes" placeholder="Notes" className={`sm:col-span-3 ${inputClass}`} />
       </div>
+      <p className="mt-3 text-xs opacity-60">
+        Products here are for reference only and don&apos;t change stock. Record the sale, its price and any discount
+        under Inventory → Record Stock Out — that is where order values come from.
+      </p>
       <div className="mt-4 flex items-center gap-3">
         <button
           type="submit"

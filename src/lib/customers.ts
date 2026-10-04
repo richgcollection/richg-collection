@@ -1,6 +1,7 @@
 import 'server-only'
 import { prisma } from '@/lib/prisma'
 import { kesToUsd } from '@/lib/money'
+import { saleRevenueKes } from '@/lib/inventory'
 
 /** Normalizes Kenyan phone numbers to `2547XXXXXXXX` / `2541XXXXXXXX` so the same person's number matches across checkouts and manual entry. */
 export function normalizePhone(raw: string | null | undefined): string | null {
@@ -87,10 +88,28 @@ export function formatPhoneForExport(phone: string | null | undefined): string {
 
 const normalizeName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
 
+export type LedgerSale = {
+  id: string
+  reason: 'MANUAL_SALE' | 'ONLINE_SALE'
+  productName: string
+  variantLabel: string | null
+  quantity: number
+  unitPriceKes: number | null
+  discountKes: number | null
+  /** After discount. */
+  valueKes: number
+  createdAt: Date
+}
+
+export type CustomerLedger = { spendKes: number; sales: LedgerSale[] }
+
 /**
- * Lifetime spend per customer id, in KES, from the sales ledger (manual and
- * online sales) — the stored `totalSpentKes` misses every sale recorded
- * outside the website checkout, including the whole imported history.
+ * Sales per customer id from the stock ledger (manual and online sales),
+ * newest first, with lifetime spend net of discounts. This is the only source
+ * of a customer's order values: they are recorded and corrected under
+ * Inventory → Stock Out, never on the customer profile. The stored
+ * `totalSpentKes` misses every sale recorded outside the website checkout,
+ * including the whole imported history.
  *
  * Online sales are matched by the order's phone number. Manual sales only
  * carry the buyer's name, so they are matched on the exact full name; when
@@ -99,12 +118,24 @@ const normalizeName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
  * gets the spend. Names that still don't resolve to exactly one customer are
  * left out rather than guessed.
  */
-export async function getLifetimeSpendByCustomer(): Promise<Map<string, number>> {
+export async function getLedgerByCustomer(): Promise<Map<string, CustomerLedger>> {
   const [customers, sales] = await Promise.all([
     prisma.customer.findMany({ select: { id: true, firstName: true, lastName: true, phone: true } }),
     prisma.stockMovement.findMany({
       where: { direction: 'OUT', reason: { in: ['MANUAL_SALE', 'ONLINE_SALE'] } },
-      select: { quantity: true, unitPriceKes: true, counterparty: true, order: { select: { guestPhone: true } } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        reason: true,
+        quantity: true,
+        unitPriceKes: true,
+        discountKes: true,
+        counterparty: true,
+        createdAt: true,
+        order: { select: { guestPhone: true } },
+        product: { select: { name: true } },
+        variant: { select: { optionValues: { select: { optionValue: { select: { value: true } } } } } },
+      },
     }),
   ])
 
@@ -123,14 +154,34 @@ export async function getLifetimeSpendByCustomer(): Promise<Map<string, number>>
     return withPhone.length === 1 ? withPhone[0].id : null
   }
 
-  const spend = new Map<string, number>()
+  const ledger = new Map<string, CustomerLedger>()
   for (const s of sales) {
     const phone = normalizePhone(s.order?.guestPhone)
     const id = (phone && byPhone.get(phone)) || (s.counterparty ? resolveName(s.counterparty) : null)
     if (!id) continue
-    spend.set(id, (spend.get(id) ?? 0) + (s.unitPriceKes ?? 0) * s.quantity)
+    const entry = ledger.get(id) ?? { spendKes: 0, sales: [] }
+    const valueKes = saleRevenueKes(s)
+    entry.spendKes += valueKes
+    entry.sales.push({
+      id: s.id,
+      reason: s.reason as LedgerSale['reason'],
+      productName: s.product.name,
+      variantLabel: s.variant?.optionValues.map((ov) => ov.optionValue.value).join(' / ') || null,
+      quantity: s.quantity,
+      unitPriceKes: s.unitPriceKes,
+      discountKes: s.discountKes,
+      valueKes,
+      createdAt: s.createdAt,
+    })
+    ledger.set(id, entry)
   }
-  return spend
+  return ledger
+}
+
+/** Lifetime spend per customer id, in KES, net of discounts — see getLedgerByCustomer. */
+export async function getLifetimeSpendByCustomer(): Promise<Map<string, number>> {
+  const ledger = await getLedgerByCustomer()
+  return new Map(Array.from(ledger, ([id, entry]) => [id, entry.spendKes]))
 }
 
 const META_AUDIENCE_HEADERS = ['email', 'phone', 'fn', 'ln', 'ct', 'country', 'gen', 'value'] as const

@@ -168,7 +168,7 @@ export async function updateCustomerAction(formData: FormData): Promise<ActionRe
   if (data.phone?.trim() && !phone) {
     return { success: false, error: 'Enter a valid phone number.' }
   }
-  if (phone && !/^d{9,15}$/.test(phone)) {
+  if (phone && !/^\d{9,15}$/.test(phone)) {
     return { success: false, error: 'That number has the wrong number of digits.' }
   }
 

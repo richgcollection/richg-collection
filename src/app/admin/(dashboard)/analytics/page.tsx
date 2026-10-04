@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { formatKes } from '@/lib/money'
-import { DEFAULT_RANGE, getAnalytics, MONTH_NAMES, RANGE_PRESETS, type Granularity, type RangeKey } from '@/lib/analytics'
+import { DEFAULT_RANGE, getAnalytics, RANGE_PRESETS, type Granularity, type RangeKey } from '@/lib/analytics'
 import {
   CalendarHeatmap,
   ChartCard,
@@ -13,6 +13,7 @@ import {
   StatTile,
 } from '@/components/admin/analytics/charts'
 import { VelocityTable } from '@/components/admin/analytics/VelocityTable'
+import { PeriodSelect } from '@/components/admin/analytics/PeriodSelect'
 import { CLASS_META, VIZ } from '@/components/admin/analytics/tokens'
 
 export const dynamic = 'force-dynamic'
@@ -53,21 +54,19 @@ export default async function AdminAnalyticsPage({
   const { range, g, year, month } = await searchParams
   const rangeKey: RangeKey = range && range in RANGE_PRESETS ? (range as RangeKey) : DEFAULT_RANGE
   const granularity = GRANULARITIES.some((x) => x.value === g) ? (g as Granularity) : undefined
-  const yearNum = /^d{4}$/.test(year ?? '') ? Number(year) : undefined
+  const yearNum = /^\d{4}$/.test(year ?? '') ? Number(year) : undefined
   const monthNum = yearNum && /^(0?[1-9]|1[0-2])$/.test(month ?? '') ? Number(month) : undefined
 
   const a = await getAnalytics({ range: rangeKey, granularity, year: yearNum, month: monthNum })
   const { kpis, prevKpis: prev, series } = a
   const labels = series.map((b) => b.label)
   const cal = a.range.calendar
-  /** Picking a rolling range clears the year/month, and picking a year/month replaces the range. */
-  const href = (next: { range?: string; g?: string; year?: number; month?: number | null }) => {
+  /** Picking a rolling range clears the year/month (set by PeriodSelect); otherwise they are kept. */
+  const href = (next: { range?: string; g?: string }) => {
     const p = new URLSearchParams()
-    const nextYear = 'range' in next ? undefined : 'year' in next ? next.year : cal?.year
-    const nextMonth = 'range' in next || 'year' in next ? next.month ?? undefined : cal?.month ?? undefined
-    if (nextYear) {
-      p.set('year', String(nextYear))
-      if (nextMonth) p.set('month', String(nextMonth))
+    if (!next.range && cal) {
+      p.set('year', String(cal.year))
+      if (cal.month) p.set('month', String(cal.month))
     } else {
       const r = next.range ?? rangeKey
       if (r !== DEFAULT_RANGE) p.set('range', r)
@@ -138,11 +137,12 @@ export default async function AdminAnalyticsPage({
             </Pill>
           ))}
           <span className="mx-2 h-5 w-px bg-black/10 dark:bg-white/10" aria-hidden />
-          {a.availableYears.map((y) => (
-            <Pill key={y} href={href({ year: y, month: null })} active={cal?.year === y && !cal.month}>
-              {y}
-            </Pill>
-          ))}
+          <PeriodSelect
+            years={a.availableYears}
+            year={cal?.year ?? null}
+            month={cal?.month ?? null}
+            months={cal?.months ?? []}
+          />
           <span className="mx-2 h-5 w-px bg-black/10 dark:bg-white/10" aria-hidden />
           <Pill href={href({ g: undefined })} active={!granularity}>
             Auto
@@ -153,19 +153,6 @@ export default async function AdminAnalyticsPage({
             </Pill>
           ))}
         </div>
-        {cal && (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-[var(--viz-ink-2)]">Month in {cal.year}:</span>
-            <Pill href={href({ year: cal.year, month: null })} active={!cal.month}>
-              Whole year
-            </Pill>
-            {cal.months.map((m) => (
-              <Pill key={m} href={href({ year: cal.year, month: m })} active={cal.month === m}>
-                {MONTH_NAMES[m - 1].slice(0, 3)}
-              </Pill>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* ---------------------------------------------------------------- insights */}

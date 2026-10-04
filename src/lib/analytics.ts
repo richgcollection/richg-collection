@@ -323,13 +323,16 @@ export async function getAnalytics(opts: {
   let prevTo: Date
   let label: string = preset.label
   let comparisonLabel: string
-  // A year/month that hasn't started yet falls back to the rolling range.
+  // A year that hasn't started falls back to the rolling range; a month that hasn't started, to its whole year.
+  const startedMonths = opts.year
+    ? Array.from({ length: 12 }, (_, i) => i + 1).filter((m) => startOfEatMonth(opts.year!, m - 1) < endOfToday)
+    : []
   const calendar =
-    opts.year && startOfEatMonth(opts.year, (opts.month ?? 1) - 1) < endOfToday
+    opts.year && startedMonths.length > 0
       ? {
           year: opts.year,
-          month: opts.month ?? null,
-          months: Array.from({ length: 12 }, (_, i) => i + 1).filter((m) => startOfEatMonth(opts.year!, m - 1) < endOfToday),
+          month: opts.month && startedMonths.includes(opts.month) ? opts.month : null,
+          months: startedMonths,
         }
       : null
 

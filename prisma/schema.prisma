@@ -344,3 +344,14 @@ model ContactMessage {
   message   String   @db.Text
   createdAt DateTime @default(now())
 }
+
+/// One score in the RICHG 60-second push-up challenge (single ongoing competition).
+model PushupEntry {
+  id        String   @id @default(cuid())
+  name      String
+  score     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([score])
+}

@@ -4,7 +4,7 @@ import { LEADERBOARD_SIZE, MEDALS, PRIZES, ROUND_SECONDS } from '@/lib/pushup-ch
 import { countPushupEntries, getPushupEntries } from '@/lib/queries/pushup-challenge'
 
 export const metadata: Metadata = {
-  title: 'Push-Up Challenge Leaderboard',
+  title: 'Push-Up Challenge Leaderboard | Rich G Collection',
   description: `The RICHG ${ROUND_SECONDS}-second push-up challenge. Live leaderboard, top score wins.`,
 }
 

@@ -44,6 +44,9 @@ export async function Footer() {
           <Link href="/about" className="opacity-70 hover:opacity-100">
             About Us
           </Link>
+          <Link href="/pushup-challenge" className="opacity-70 hover:opacity-100">
+            Push-Up Challenge
+          </Link>
           <Link href="/contact" className="opacity-70 hover:opacity-100">
             Contact
           </Link>

@@ -7,18 +7,14 @@ import {
   deletePushupEntryAction,
   updatePushupScoreAction,
 } from '@/lib/actions/admin-pushup-challenge'
-
-type Entry = { id: string; name: string; score: number }
-
-const ROUND_SECONDS = 60
-const MAX_SCORE = 300
-const LEADERBOARD_SIZE = 10
-const MEDALS = ['🥇', '🥈', '🥉']
-const PRIZES = [
-  { medal: '🥇', place: '1st Place', amount: 'KSh 15,500' },
-  { medal: '🥈', place: '2nd Place', amount: 'KSh 9,700' },
-  { medal: '🥉', place: '3rd Place', amount: 'KSh 6,800' },
-]
+import {
+  LEADERBOARD_SIZE,
+  MAX_SCORE,
+  MEDALS,
+  PRIZES,
+  ROUND_SECONDS,
+  type PushupEntry as Entry,
+} from '@/lib/pushup-challenge'
 
 const inputClass =
   'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10'

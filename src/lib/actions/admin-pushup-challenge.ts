@@ -5,8 +5,7 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth/dal'
 import { prisma } from '@/lib/prisma'
 import type { ActionResult } from '@/lib/actions/cart'
-
-const MAX_SCORE = 300
+import { MAX_SCORE } from '@/lib/pushup-challenge'
 
 const scoreSchema = z.coerce
   .number()
@@ -34,7 +33,7 @@ export async function addPushupEntryAction(
   }
 
   await prisma.pushupEntry.create({ data: parsed.data })
-  revalidatePath('/admin/pushup-challenge')
+  revalidateChallenge()
   return { success: true }
 }
 
@@ -47,7 +46,7 @@ export async function updatePushupScoreAction(id: string, score: number): Promis
   }
 
   await prisma.pushupEntry.update({ where: { id }, data: { score: parsed.data } })
-  revalidatePath('/admin/pushup-challenge')
+  revalidateChallenge()
   return { success: true }
 }
 
@@ -55,7 +54,7 @@ export async function deletePushupEntryAction(id: string): Promise<ActionResult>
   await requireAdmin()
 
   await prisma.pushupEntry.delete({ where: { id } })
-  revalidatePath('/admin/pushup-challenge')
+  revalidateChallenge()
   return { success: true }
 }
 
@@ -63,6 +62,11 @@ export async function clearPushupEntriesAction(): Promise<ActionResult> {
   await requireAdmin()
 
   await prisma.pushupEntry.deleteMany()
-  revalidatePath('/admin/pushup-challenge')
+  revalidateChallenge()
   return { success: true }
+}
+
+function revalidateChallenge() {
+  revalidatePath('/admin/pushup-challenge')
+  revalidatePath('/pushup-challenge')
 }

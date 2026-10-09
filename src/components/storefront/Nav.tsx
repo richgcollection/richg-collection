@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: '/about', label: 'About Us' },
   { href: '/shop', label: 'Shop' },
   { href: '/collections', label: 'Collections' },
+  { href: '/pushup-challenge', label: 'Challenge' },
   { href: '/contact', label: 'Contact' },
   { href: '/account', label: 'Account' },
   { href: '/cart', label: 'Cart' },

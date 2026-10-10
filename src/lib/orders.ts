@@ -1,5 +1,6 @@
 import { after } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { syncAffiliateCommissions } from '@/lib/affiliates'
 import type { Cart } from '@/lib/cart'
 import { upsertCustomerFromOrder } from '@/lib/customers'
 import { applyOrderStockOut } from '@/lib/inventory'
@@ -85,6 +86,7 @@ export async function markOrderPaid(orderId: string, createdById?: string): Prom
       data: { orderId, status: 'PROCESSING', occurredAt: new Date(), createdById },
     })
     await applyOrderStockOut(tx, orderId)
+    await syncAffiliateCommissions(tx, orderId)
     return true
   })
 

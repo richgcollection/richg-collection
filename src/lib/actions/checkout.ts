@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { attributeOrderFromReferral } from '@/lib/affiliates'
 import { getCart, getCurrentCartId } from '@/lib/cart'
 import { createPendingOrder } from '@/lib/orders'
 import { initializeTransaction, isPaystackConfigured } from '@/lib/paystack'
@@ -52,6 +53,7 @@ export async function placeOrderAction(
 
   const shippingKes = await getShippingRateForTown(town)
   const order = await createPendingOrder(cart, shippingAddress, shippingKes)
+  await attributeOrderFromReferral(order.id)
 
   const cartId = await getCurrentCartId()
   if (cartId) {

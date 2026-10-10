@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { VIZ } from './tokens'
+import { DetailsButton, DetailsPanel, useDisclosure } from './Disclosure'
 
 /*
  * Small SVG chart kit for the admin analytics page. Props must stay
@@ -125,25 +126,36 @@ export function ChartCard({
   children,
   className = '',
   action,
+  details,
+  detailsLabel,
 }: {
   title: string
   subtitle?: string
   legend?: Array<{ label: string; color: string; shape?: 'line' | 'box' }>
   table?: TableData
   children: ReactNode
+  /** Layout classes (e.g. column spans); replaced by a full-width span while details are open. */
   className?: string
   action?: ReactNode
+  /** Drill-down shown under the chart when "Details" is pressed. */
+  details?: ReactNode
+  detailsLabel?: string
 }) {
   const [view, setView] = useState<'chart' | 'table'>('chart')
+  const d = useDisclosure()
+  const expanded = Boolean(details) && d.open
   return (
-    <section className={`min-w-0 rounded-lg border border-black/10 bg-surface p-5 dark:border-white/10 ${className}`}>
+    <section
+      className={`min-w-0 rounded-lg border bg-surface p-5 ${expanded ? 'col-span-full border-foreground/25' : `border-black/10 dark:border-white/10 ${className}`}`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-xs text-[var(--viz-ink-2)]">{subtitle}</p>}
+          {subtitle && <p className="mt-0.5 text-xs break-words text-[var(--viz-ink-2)]">{subtitle}</p>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {action}
+          {details && <DetailsButton open={d.open} controls={d.id} onClick={d.toggle} label={detailsLabel} subject={title} />}
           {table && (
             <div className="flex rounded-md border border-black/10 text-xs dark:border-white/10" role="group" aria-label="View">
               {(['chart', 'table'] as const).map((v) => (
@@ -178,6 +190,11 @@ export function ChartCard({
       <div className="mt-4">
         {view === 'chart' || !table ? children : <DataTable table={table} />}
       </div>
+      {details && (
+        <DetailsPanel id={d.id} open={d.open} label={`${title} details`}>
+          {details}
+        </DetailsPanel>
+      )}
     </section>
   )
 }
@@ -199,7 +216,7 @@ function DataTable({ table }: { table: TableData }) {
           {table.rows.map((row, ri) => (
             <tr key={ri} className="border-b border-black/5 dark:border-white/5">
               {row.map((cell, ci) => (
-                <td key={ci} className={`py-1.5 pr-3 ${ci > 0 ? 'text-right tabular-nums' : ''}`}>
+                <td key={ci} className={`py-1.5 pr-3 ${ci > 0 ? 'text-right whitespace-nowrap tabular-nums' : 'break-words'}`}>
                   {cell}
                 </td>
               ))}
@@ -855,6 +872,7 @@ export function StatTile({
   spark,
   hint,
   hero = false,
+  children,
 }: {
   label: string
   value: string
@@ -862,16 +880,33 @@ export function StatTile({
   upIsGood?: boolean
   spark?: number[]
   hint?: string
+  /** Spans the full row of the tile grid. */
   hero?: boolean
+  /** Drill-down revealed by the tile's "Details" button; the tile then spans the full row. */
+  children?: ReactNode
 }) {
   const hasDelta = deltaPct !== undefined && deltaPct !== null && Number.isFinite(deltaPct)
   const good = hasDelta && (deltaPct >= 0) === upIsGood
+  const d = useDisclosure()
+  const expanded = Boolean(children) && d.open
   return (
-    <div className={`min-w-0 rounded-lg border border-black/10 bg-surface p-4 dark:border-white/10 ${hero ? 'sm:col-span-2' : ''}`}>
-      <p className="text-xs text-[var(--viz-ink-2)]">{label}</p>
-      <div className="mt-1.5 flex items-end justify-between gap-3">
-        <p className={`${hero ? 'text-4xl sm:text-5xl' : 'text-2xl'} truncate font-semibold tracking-tight`}>{value}</p>
-        {spark && spark.length > 1 && <Sparkline values={spark} width={hero ? 160 : 84} height={hero ? 44 : 28} />}
+    <div
+      className={`min-w-0 rounded-lg border bg-surface p-4 ${hero || expanded ? 'col-span-full' : ''} ${expanded ? 'border-foreground/25' : 'border-black/10 dark:border-white/10'}`}
+    >
+      {/* Container query context: the figure scales with the tile, never with the viewport. */}
+      <div className={`@container min-w-0 ${children ? 'cursor-pointer' : ''}`} onClick={children ? d.toggle : undefined}>
+        <div className="flex items-start justify-between gap-2">
+          <p className="min-w-0 text-xs break-words text-[var(--viz-ink-2)]">{label}</p>
+          {children && <DetailsButton open={d.open} controls={d.id} onClick={d.toggle} subject={label} />}
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+          <p
+            className={`${hero ? 'text-[clamp(1.5rem,8cqi,3rem)]' : 'text-[clamp(1.125rem,11cqi,1.5rem)]'} min-w-0 max-w-full leading-tight font-semibold tracking-tight tabular-nums [overflow-wrap:anywhere]`}
+          >
+            {value}
+          </p>
+          {spark && spark.length > 1 && <Sparkline values={spark} width={hero ? 160 : 84} height={hero ? 44 : 28} />}
+        </div>
       </div>
       <div className="mt-1.5 flex min-h-4 flex-wrap items-center gap-x-2 text-xs">
         {hasDelta && (
@@ -884,6 +919,11 @@ export function StatTile({
         {!hasDelta && hint && <span className="text-[var(--viz-muted)]">{hint}</span>}
       </div>
       {hasDelta && hint && <p className="mt-0.5 text-xs text-[var(--viz-muted)]">{hint}</p>}
+      {children && (
+        <DetailsPanel id={d.id} open={d.open} label={`${label} details`}>
+          {children}
+        </DetailsPanel>
+      )}
     </div>
   )
 }
@@ -892,8 +932,8 @@ export function Meter({ label, value, max, detail, tone = 'var(--viz-1)' }: { la
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
   return (
     <div>
-      <div className="flex items-baseline justify-between text-xs">
-        <span className="text-[var(--viz-ink-2)]">{label}</span>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs">
+        <span className="min-w-0 break-words text-[var(--viz-ink-2)]">{label}</span>
         <span className="font-medium tabular-nums">{detail}</span>
       </div>
       <div className="mt-1.5 h-2 rounded-full bg-[var(--viz-seq-0)]">

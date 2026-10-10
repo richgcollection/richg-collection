@@ -45,19 +45,37 @@ enum StockMovementReason {
   ADJUSTMENT
 }
 
+enum AffiliateStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum CommissionType {
+  FIXED
+  PERCENT
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  VOID
+}
+
 model User {
-  id             String          @id @default(cuid())
-  email          String          @unique
-  passwordHash   String?
-  name           String?
-  phone          String?
-  role           Role            @default(CUSTOMER)
-  createdAt      DateTime        @default(now())
-  addresses      Address[]
-  orders         Order[]
-  cart           Cart?
-  stockMovements StockMovement[]
-  statusEvents   OrderStatusEvent[]
+  id               String             @id @default(cuid())
+  email            String             @unique
+  passwordHash     String?
+  name             String?
+  phone            String?
+  role             Role               @default(CUSTOMER)
+  createdAt        DateTime           @default(now())
+  addresses        Address[]
+  orders           Order[]
+  cart             Cart?
+  stockMovements   StockMovement[]
+  statusEvents     OrderStatusEvent[]
+  affiliatePayouts AffiliatePayout[]
 }
 
 model Address {
@@ -124,13 +142,15 @@ model Product {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  categories     ProductCategory[]
-  images         ProductImage[]
-  variants       ProductVariant[]
-  options        ProductOption[]
-  orderItems     OrderItem[]
-  cartItems      CartItem[]
-  stockMovements StockMovement[]
+  categories           ProductCategory[]
+  images               ProductImage[]
+  variants             ProductVariant[]
+  options              ProductOption[]
+  orderItems           OrderItem[]
+  cartItems            CartItem[]
+  stockMovements       StockMovement[]
+  affiliateProducts    AffiliateProduct[]
+  affiliateCommissions AffiliateCommission[]
 
   @@index([status])
 }
@@ -228,31 +248,36 @@ model CartItem {
 }
 
 model Order {
-  id              String          @id @default(cuid())
-  orderNumber     String          @unique
-  userId          String?
-  user            User?           @relation(fields: [userId], references: [id])
-  customerId      String?
-  customer        Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  guestEmail      String?
-  guestPhone      String?
-  status          OrderStatus     @default(PENDING)
-  paymentStatus   PaymentStatus   @default(PENDING)
-  paymentRef      String?         @unique
-  subtotalKes     Int
-  shippingKes     Int             @default(0)
-  totalKes        Int
-  shippingAddress Json
-  billingAddress  Json?
-  items           OrderItem[]
-  stockMovements  StockMovement[]
-  statusEvents    OrderStatusEvent[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id                   String                @id @default(cuid())
+  orderNumber          String                @unique
+  userId               String?
+  user                 User?                 @relation(fields: [userId], references: [id])
+  customerId           String?
+  customer             Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  guestEmail           String?
+  guestPhone           String?
+  status               OrderStatus           @default(PENDING)
+  paymentStatus        PaymentStatus         @default(PENDING)
+  paymentRef           String?               @unique
+  subtotalKes          Int
+  shippingKes          Int                   @default(0)
+  totalKes             Int
+  shippingAddress      Json
+  billingAddress       Json?
+  items                OrderItem[]
+  stockMovements       StockMovement[]
+  statusEvents         OrderStatusEvent[]
+  /// Affiliate credited with the sale: set at checkout from the referral cookie, or by an admin.
+  affiliateId          String?
+  affiliate            Affiliate?            @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+  affiliateCommissions AffiliateCommission[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@index([userId])
   @@index([customerId])
   @@index([status])
+  @@index([affiliateId])
 }
 
 /// One row per fulfillment status change. `occurredAt` is set by the admin (e.g. the actual delivery date); `createdAt` is when it was recorded.
@@ -282,6 +307,8 @@ model OrderItem {
   unitPriceKes    Int
   quantity        Int
   lineTotalKes    Int
+
+  affiliateCommissions AffiliateCommission[]
 
   @@index([orderId])
 }
@@ -370,4 +397,95 @@ model PushupChallengeState {
   winnerScore          Int?
   winnerAnnouncedAt    DateTime?
   updatedAt            DateTime  @updatedAt
+}
+
+/// A referral partner. Kept separate from User so an affiliate login can never carry admin access.
+/// An admin-invited affiliate starts ACTIVE with no password; signing up with that email claims it.
+model Affiliate {
+  id              String          @id @default(cuid())
+  name            String
+  email           String          @unique
+  passwordHash    String?
+  phone           String?
+  status          AffiliateStatus @default(PENDING)
+  referralCode    String          @unique
+  /// Default terms. FIXED: KES per unit sold. PERCENT: basis points of the line total (1000 = 10%).
+  commissionType  CommissionType  @default(PERCENT)
+  commissionValue Int             @default(1000)
+  invitedAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  products    AffiliateProduct[]
+  orders      Order[]
+  commissions AffiliateCommission[]
+  payouts     AffiliatePayout[]
+
+  @@index([status])
+}
+
+/// A product an affiliate earns commission on, with optional per-product terms (both null = affiliate default).
+model AffiliateProduct {
+  id              String          @id @default(cuid())
+  affiliateId     String
+  affiliate       Affiliate       @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  commissionType  CommissionType?
+  commissionValue Int?
+  createdAt       DateTime        @default(now())
+
+  @@unique([affiliateId, productId])
+  @@index([productId])
+}
+
+/// Commission earned on one order line. Terms are snapshotted so later changes to rates never rewrite history.
+/// `periodMonth` (YYYY-MM, store time) is the month the order was paid; payouts settle by month.
+model AffiliateCommission {
+  id             String           @id @default(cuid())
+  affiliateId    String
+  affiliate      Affiliate        @relation(fields: [affiliateId], references: [id])
+  orderId        String
+  order          Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItemId    String
+  orderItem      OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product          @relation(fields: [productId], references: [id])
+  quantity       Int
+  saleAmountKes  Int
+  commissionType CommissionType
+  /// Snapshot of the rate: KES per unit (FIXED) or basis points (PERCENT).
+  rateValue      Int
+  amountKes      Int
+  status         CommissionStatus @default(PENDING)
+  /// MANUAL when an admin voided it; ORDER_<STATUS> / UNATTRIBUTED when voided automatically.
+  voidReason     String?
+  periodMonth    String
+  payoutId       String?
+  payout         AffiliatePayout? @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([orderItemId, affiliateId])
+  @@index([affiliateId, periodMonth])
+  @@index([orderId])
+  @@index([payoutId])
+}
+
+/// Money paid to an affiliate to settle a month's commission.
+model AffiliatePayout {
+  id          String                @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate             @relation(fields: [affiliateId], references: [id])
+  periodMonth String
+  amountKes   Int
+  paidAt      DateTime
+  reference   String?
+  note        String?               @db.Text
+  createdById String?
+  createdBy   User?                 @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime              @default(now())
+  commissions AffiliateCommission[]
+
+  @@index([affiliateId, periodMonth])
 }

@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
 import { OrderActions } from '@/components/admin/OrderActions'
+import { OrderAffiliatePanel } from '@/components/admin/OrderAffiliatePanel'
+import { OrderDeleteButton } from '@/components/admin/OrderDeleteButton'
 import { prisma } from '@/lib/prisma'
 import { formatKes } from '@/lib/money'
 import { formatStoreDateTime } from '@/lib/dates'
@@ -13,6 +15,17 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     where: { id },
     include: {
       items: true,
+      stockMovements: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          productId: true,
+          variantId: true,
+          direction: true,
+          quantity: true,
+          product: { select: { name: true } },
+        },
+      },
       statusEvents: {
         orderBy: { occurredAt: 'desc' },
         include: { createdBy: { select: { name: true, email: true } } },
@@ -96,6 +109,8 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             paymentStatus={order.paymentStatus}
           />
 
+          <OrderAffiliatePanel orderId={order.id} />
+
           <div className="rounded-lg border border-black/10 p-4 text-sm dark:border-white/10">
             <p className="mb-3 text-xs font-medium tracking-wide uppercase opacity-70">Status History</p>
             <ol className="flex flex-col gap-3">
@@ -114,6 +129,14 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               </li>
             </ol>
           </div>
+
+          <OrderDeleteButton
+            orderId={order.id}
+            orderNumber={order.orderNumber}
+            items={order.items}
+            movements={order.stockMovements}
+            redirectToList
+          />
         </div>
       </div>
     </div>

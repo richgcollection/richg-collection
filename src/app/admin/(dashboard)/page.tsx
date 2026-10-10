@@ -50,11 +50,13 @@ export default async function AdminDashboardPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))] gap-4">
         {cards.map((card) => (
-          <div key={card.label} className="rounded-lg border border-black/10 bg-surface p-5 dark:border-white/10">
-            <p className="text-xs font-medium tracking-wide uppercase opacity-60">{card.label}</p>
-            <p className="mt-2 text-2xl font-semibold">{card.value}</p>
+          <div key={card.label} className="@container min-w-0 rounded-lg border border-black/10 bg-surface p-5 dark:border-white/10">
+            <p className="text-xs font-medium tracking-wide break-words uppercase opacity-60">{card.label}</p>
+            <p className="mt-2 text-[clamp(1.125rem,11cqi,1.5rem)] leading-tight font-semibold tabular-nums [overflow-wrap:anywhere]">
+              {card.value}
+            </p>
           </div>
         ))}
       </div>

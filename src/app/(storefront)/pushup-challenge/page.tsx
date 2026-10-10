@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
-import { AutoRefresh } from '@/components/storefront/AutoRefresh'
+import { PublicChallengeLive } from '@/components/pushup-challenge/PublicChallengeLive'
 import { LEADERBOARD_SIZE, MEDALS, PRIZES, ROUND_SECONDS } from '@/lib/pushup-challenge'
-import { countPushupEntries, getPushupEntries } from '@/lib/queries/pushup-challenge'
+import { countPushupEntries, getChallengeLiveState, getPushupEntries } from '@/lib/queries/pushup-challenge'
 
 export const metadata: Metadata = {
   title: 'Push-Up Challenge Leaderboard | Rich G Collection',
@@ -9,12 +9,14 @@ export const metadata: Metadata = {
 }
 
 export default async function PushupChallengePage() {
-  const [entries, total] = await Promise.all([getPushupEntries(LEADERBOARD_SIZE), countPushupEntries()])
+  const [entries, total, live] = await Promise.all([
+    getPushupEntries(LEADERBOARD_SIZE),
+    countPushupEntries(),
+    getChallengeLiveState(),
+  ])
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-16 sm:py-24">
-      <AutoRefresh seconds={15} />
-
       <div className="text-center">
         <div className="text-xs font-semibold tracking-[0.3em] text-[#b8942a] uppercase dark:text-[#d4af37]">
           RICHG Challenge
@@ -24,6 +26,8 @@ export default async function PushupChallengePage() {
         </h1>
         <p className="mt-3 opacity-70">One competition · One leaderboard · Top score wins</p>
       </div>
+
+      <PublicChallengeLive initial={live} />
 
       <div className="mt-12 grid gap-3 sm:grid-cols-3">
         {PRIZES.map((prize) => (

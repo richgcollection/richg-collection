@@ -1,18 +1,29 @@
 'use client'
 
 import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
+import { ChallengeClock } from '@/components/pushup-challenge/ChallengeClock'
+import { useChallengeLive } from '@/components/pushup-challenge/useChallengeLive'
 import {
   addPushupEntryAction,
+  announceWinnerAction,
   clearPushupEntriesAction,
   deletePushupEntryAction,
+  hideWinnerAction,
+  pauseChallengeTimerAction,
+  resetChallengeTimerAction,
+  resumeChallengeTimerAction,
+  startChallengeTimerAction,
   updatePushupScoreAction,
 } from '@/lib/actions/admin-pushup-challenge'
+import type { ActionResult } from '@/lib/actions/cart'
 import {
+  COUNTDOWN_SECONDS,
   LEADERBOARD_SIZE,
   MAX_SCORE,
   MEDALS,
   PRIZES,
   ROUND_SECONDS,
+  type ChallengeLiveState,
   type PushupEntry as Entry,
 } from '@/lib/pushup-challenge'
 
@@ -24,10 +35,79 @@ const primaryButtonClass =
 const secondaryButtonClass =
   'rounded-full border border-black/10 px-5 py-2 text-sm font-medium disabled:opacity-50 dark:border-white/10'
 
-export function PushupChallenge({ entries }: { entries: Entry[] }) {
+export function PushupChallenge({ entries, live: initialLive }: { entries: Entry[]; live: ChallengeLiveState }) {
+  const { live, phase, refreshNow } = useChallengeLive(initialLive)
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  /** Runs a timer/winner action, then re-reads the shared state so this screen updates at once. */
+  function run(action: () => Promise<ActionResult>) {
+    setError(null)
+    startTransition(async () => {
+      const result = await action()
+      if (!result.success) setError(result.error)
+      await refreshNow()
+    })
+  }
+
+  const leader = entries[0]
+
   return (
     <div className="flex flex-col gap-6">
-      <Timer />
+      <div className="flex flex-col items-start justify-between gap-4 rounded-lg border border-black/10 p-5 sm:flex-row sm:items-center dark:border-white/10">
+        <div>
+          <div className="text-xs font-semibold tracking-widest text-[#b8942a] uppercase dark:text-[#d4af37]">
+            RICHG
+          </div>
+          <div className="text-lg font-semibold">{ROUND_SECONDS}-Second Push-Up Challenge</div>
+          <p className="mt-1 text-xs opacity-60">
+            Start shows a {COUNTDOWN_SECONDS}-second &quot;about to begin&quot; countdown on every screen, then
+            the {ROUND_SECONDS}-second round.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {phase.phase === 'idle' && (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => run(startChallengeTimerAction)}
+                className={primaryButtonClass}
+              >
+                Start Challenge
+              </button>
+            )}
+            {(phase.phase === 'countdown' || phase.phase === 'running') && (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => run(phase.paused ? resumeChallengeTimerAction : pauseChallengeTimerAction)}
+                className={primaryButtonClass}
+              >
+                {phase.paused ? 'Resume' : 'Pause'}
+              </button>
+            )}
+            {phase.phase !== 'idle' && (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => run(resetChallengeTimerAction)}
+                className={secondaryButtonClass}
+              >
+                Reset Timer
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="sm:text-right">
+          {phase.phase === 'idle' ? (
+            <div className="text-center">
+              <div className="text-6xl font-black tabular-nums opacity-40">{ROUND_SECONDS}</div>
+              <div className="text-xs tracking-widest uppercase opacity-60">Ready</div>
+            </div>
+          ) : (
+            <ChallengeClock phase={phase} />
+          )}
+        </div>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         {PRIZES.map((prize) => (
@@ -40,66 +120,56 @@ export function PushupChallenge({ entries }: { entries: Entry[] }) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
-        <AddEntryForm total={entries.length} />
+        <div className="flex flex-col gap-6">
+          <AddEntryForm total={entries.length} onCleared={refreshNow} />
+
+          <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-5 dark:border-white/10">
+            <h2 className="font-semibold">Winner</h2>
+            {live.winner ? (
+              <>
+                <p className="text-sm">
+                  🏆 <span className="font-semibold">{live.winner.name}</span> ({live.winner.score}) is announced on
+                  the public leaderboard.
+                </p>
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => run(hideWinnerAction)}
+                  className={secondaryButtonClass}
+                >
+                  Hide Announcement
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm opacity-70">
+                  {leader
+                    ? `Reveals ${leader.name} (${leader.score}) with confetti on every open leaderboard screen.`
+                    : 'Add scores first, then announce the #1 at the end of the competition.'}
+                </p>
+                <button
+                  type="button"
+                  disabled={!leader || isPending}
+                  onClick={() => {
+                    if (leader && confirm(`Announce ${leader.name} as the winner?`)) run(announceWinnerAction)
+                  }}
+                  className={primaryButtonClass}
+                >
+                  Announce Winner
+                </button>
+              </>
+            )}
+          </div>
+
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        </div>
         <Leaderboard entries={entries} />
       </div>
     </div>
   )
 }
 
-function Timer() {
-  const [remaining, setRemaining] = useState(ROUND_SECONDS)
-  const [running, setRunning] = useState(false)
-
-  // The clock stops on its own at zero; Reset is what puts it back to 60.
-  const active = running && remaining > 0
-
-  useEffect(() => {
-    if (!active) return
-    const interval = setInterval(() => setRemaining((prev) => Math.max(0, prev - 1)), 1000)
-    return () => clearInterval(interval)
-  }, [active])
-
-  function reset() {
-    setRunning(false)
-    setRemaining(ROUND_SECONDS)
-  }
-
-  return (
-    <div className="flex flex-col items-start justify-between gap-4 rounded-lg border border-black/10 p-5 sm:flex-row sm:items-center dark:border-white/10">
-      <div>
-        <div className="text-xs font-semibold tracking-widest text-[#b8942a] uppercase dark:text-[#d4af37]">
-          RICHG
-        </div>
-        <div className="text-lg font-semibold">60-Second Push-Up Challenge</div>
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            disabled={remaining === 0}
-            onClick={() => setRunning((r) => !r)}
-            className={primaryButtonClass}
-          >
-            {active ? 'Pause' : remaining === ROUND_SECONDS ? 'Start Challenge' : 'Resume'}
-          </button>
-          <button type="button" onClick={reset} className={secondaryButtonClass}>
-            Reset Timer
-          </button>
-        </div>
-      </div>
-      <div className="text-right">
-        <div
-          className={`text-6xl font-black tabular-nums ${remaining === 0 ? 'text-red-600 dark:text-red-400' : ''}`}
-          aria-live="polite"
-        >
-          {remaining === 0 ? 'TIME' : remaining}
-        </div>
-        <div className="text-xs tracking-widest uppercase opacity-60">Seconds</div>
-      </div>
-    </div>
-  )
-}
-
-function AddEntryForm({ total }: { total: number }) {
+function AddEntryForm({ total, onCleared }: { total: number; onCleared: () => Promise<void> }) {
   const [state, formAction, isPending] = useActionState(addPushupEntryAction, undefined)
   const [clearError, setClearError] = useState<string | null>(null)
   const [isClearing, startClear] = useTransition()
@@ -115,11 +185,12 @@ function AddEntryForm({ total }: { total: number }) {
   }, [state])
 
   function handleClear() {
-    if (!confirm('Clear all participants? This cannot be undone.')) return
+    if (!confirm('Clear all participants? This also resets the timer and winner, and cannot be undone.')) return
     setClearError(null)
     startClear(async () => {
       const result = await clearPushupEntriesAction()
       if (!result.success) setClearError(result.error)
+      await onCleared()
     })
   }
 

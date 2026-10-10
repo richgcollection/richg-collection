@@ -355,3 +355,16 @@ model PushupEntry {
 
   @@index([score])
 }
+
+/// Live state of the push-up challenge shown on the admin and public pages. Single row, id "default".
+model PushupChallengeState {
+  id                   String    @id @default("default")
+  /// When the "about to begin" countdown started; the 60s round follows it. Null = timer idle.
+  timerStartedAt       DateTime?
+  /// Set while paused: how far into countdown + round the timer had got.
+  timerPausedElapsedMs Int?
+  winnerName           String?
+  winnerScore          Int?
+  winnerAnnouncedAt    DateTime?
+  updatedAt            DateTime  @updatedAt
+}

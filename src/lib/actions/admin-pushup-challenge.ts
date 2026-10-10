@@ -15,30 +15,59 @@ const scoreSchema = z.coerce
   .min(0, 'Push-ups must be zero or more.')
   .max(MAX_SCORE, `Push-ups can't exceed ${MAX_SCORE}.`)
 
-const entrySchema = z.object({
-  name: z.string().trim().min(1, 'Name is required.').max(50, 'Name must be 50 characters or fewer.'),
-  score: scoreSchema,
-})
+const nameSchema = z.string().trim().min(1, 'Name is required.').max(50, 'Name must be 50 characters or fewer.')
 
-export async function addPushupEntryAction(
+/** Registers a participant for the next round; their score is entered once the round ends. */
+export async function addParticipantAction(
   _prevState: ActionResult | undefined,
   formData: FormData,
 ): Promise<ActionResult> {
   await requireAdmin()
 
-  const parsed = entrySchema.safeParse({
-    name: formData.get('name'),
-    score: formData.get('score'),
-  })
+  const parsed = nameSchema.safeParse(formData.get('name'))
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0].message }
   }
 
-  await prisma.pushupEntry.create({ data: parsed.data })
+  await prisma.pushupEntry.create({ data: { name: parsed.data } })
   revalidateChallenge()
   return { success: true }
 }
 
+/** First score for a waiting participant. Only allowed once the round's timer has run out. */
+export async function submitPushupScoreAction(id: string, score: number): Promise<ActionResult> {
+  await requireAdmin()
+
+  const parsed = scoreSchema.safeParse(score)
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message }
+  }
+
+  const state = await prisma.pushupChallengeState.findUnique({ where: { id: CHALLENGE_STATE_ID } })
+  const phase = getTimerPhase(
+    {
+      startedAt: state?.timerStartedAt?.getTime() ?? null,
+      pausedElapsedMs: state?.timerPausedElapsedMs ?? null,
+    },
+    Date.now(),
+  )
+  if (phase.phase !== 'finished') {
+    return { success: false, error: 'Scores can be entered once the timer reaches TIME.' }
+  }
+
+  const { count } = await prisma.pushupEntry.updateMany({
+    where: { id, score: null },
+    data: { score: parsed.data, scoredAt: new Date() },
+  })
+  if (count === 0) {
+    return { success: false, error: 'This participant already has a score. Use Edit on the leaderboard.' }
+  }
+
+  revalidateChallenge()
+  return { success: true }
+}
+
+/** Corrects an existing score (any time). */
 export async function updatePushupScoreAction(id: string, score: number): Promise<ActionResult> {
   await requireAdmin()
 
@@ -47,7 +76,7 @@ export async function updatePushupScoreAction(id: string, score: number): Promis
     return { success: false, error: parsed.error.issues[0].message }
   }
 
-  await prisma.pushupEntry.update({ where: { id }, data: { score: parsed.data } })
+  await prisma.pushupEntry.update({ where: { id, score: { not: null } }, data: { score: parsed.data } })
   revalidateChallenge()
   return { success: true }
 }

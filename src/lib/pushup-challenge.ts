@@ -16,6 +16,7 @@ export const PRIZES = [
 ]
 
 export type PushupEntry = { id: string; name: string; score: number }
+export type PendingParticipant = { id: string; name: string }
 
 /** Timestamps are epoch milliseconds so the state survives JSON as-is. */
 export type ChallengeLiveState = {

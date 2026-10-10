@@ -1,11 +1,15 @@
 import Link from 'next/link'
 import { PushupChallenge } from '@/components/admin/PushupChallenge'
-import { getChallengeLiveState, getPushupEntries } from '@/lib/queries/pushup-challenge'
+import { getChallengeLiveState, getPendingParticipants, getPushupEntries } from '@/lib/queries/pushup-challenge'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminPushupChallengePage() {
-  const [entries, live] = await Promise.all([getPushupEntries(), getChallengeLiveState()])
+  const [entries, pending, live] = await Promise.all([
+    getPushupEntries(),
+    getPendingParticipants(),
+    getChallengeLiveState(),
+  ])
 
   return (
     <div>
@@ -17,7 +21,7 @@ export default async function AdminPushupChallengePage() {
       </div>
       <p className="mt-1 text-sm opacity-60">One competition · One leaderboard · Top score wins</p>
       <div className="mt-6">
-        <PushupChallenge entries={entries} live={live} />
+        <PushupChallenge entries={entries} pending={pending} live={live} />
       </div>
     </div>
   )

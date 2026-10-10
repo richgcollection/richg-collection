@@ -345,13 +345,16 @@ model ContactMessage {
   createdAt DateTime @default(now())
 }
 
-/// One score in the RICHG 60-second push-up challenge (single ongoing competition).
+/// A participant in the RICHG 60-second push-up challenge (single ongoing competition).
+/// Registered by name first; score is entered after their round.
 model PushupEntry {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
-  score     Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  score     Int?
+  /// When the score was first entered. Breaks ties: earlier score ranks higher.
+  scoredAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([score])
 }

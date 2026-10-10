@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState, useTransition } from 'reac
 import { ChallengeClock } from '@/components/pushup-challenge/ChallengeClock'
 import { useChallengeLive } from '@/components/pushup-challenge/useChallengeLive'
 import {
-  addPushupEntryAction,
+  addParticipantAction,
   announceWinnerAction,
   clearPushupEntriesAction,
   deletePushupEntryAction,
@@ -13,6 +13,7 @@ import {
   resetChallengeTimerAction,
   resumeChallengeTimerAction,
   startChallengeTimerAction,
+  submitPushupScoreAction,
   updatePushupScoreAction,
 } from '@/lib/actions/admin-pushup-challenge'
 import type { ActionResult } from '@/lib/actions/cart'
@@ -24,6 +25,8 @@ import {
   PRIZES,
   ROUND_SECONDS,
   type ChallengeLiveState,
+  type PendingParticipant,
+  type TimerPhase,
   type PushupEntry as Entry,
 } from '@/lib/pushup-challenge'
 
@@ -35,7 +38,15 @@ const primaryButtonClass =
 const secondaryButtonClass =
   'rounded-full border border-black/10 px-5 py-2 text-sm font-medium disabled:opacity-50 dark:border-white/10'
 
-export function PushupChallenge({ entries, live: initialLive }: { entries: Entry[]; live: ChallengeLiveState }) {
+export function PushupChallenge({
+  entries,
+  pending,
+  live: initialLive,
+}: {
+  entries: Entry[]
+  pending: PendingParticipant[]
+  live: ChallengeLiveState
+}) {
   const { live, phase, refreshNow } = useChallengeLive(initialLive)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -89,7 +100,19 @@ export function PushupChallenge({ entries, live: initialLive }: { entries: Entry
               <button
                 type="button"
                 disabled={isPending}
-                onClick={() => run(resetChallengeTimerAction)}
+                onClick={() => {
+                  // Scores lock again once the timer is reset, so check nobody from this round was missed.
+                  if (
+                    phase.phase === 'finished' &&
+                    pending.length > 0 &&
+                    !confirm(
+                      `${pending.length} participant(s) still have no score. Scores can only be entered after a round, so they will need to do the next one. Reset anyway?`,
+                    )
+                  ) {
+                    return
+                  }
+                  run(resetChallengeTimerAction)
+                }}
                 className={secondaryButtonClass}
               >
                 Reset Timer
@@ -121,7 +144,8 @@ export function PushupChallenge({ entries, live: initialLive }: { entries: Entry
 
       <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
         <div className="flex flex-col gap-6">
-          <AddEntryForm total={entries.length} onCleared={refreshNow} />
+          <AddParticipantForm total={entries.length + pending.length} onCleared={refreshNow} />
+          <PendingScores pending={pending} phase={phase} />
 
           <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-5 dark:border-white/10">
             <h2 className="font-semibold">Winner</h2>
@@ -169,8 +193,8 @@ export function PushupChallenge({ entries, live: initialLive }: { entries: Entry
   )
 }
 
-function AddEntryForm({ total, onCleared }: { total: number; onCleared: () => Promise<void> }) {
-  const [state, formAction, isPending] = useActionState(addPushupEntryAction, undefined)
+function AddParticipantForm({ total, onCleared }: { total: number; onCleared: () => Promise<void> }) {
+  const [state, formAction, isPending] = useActionState(addParticipantAction, undefined)
   const [clearError, setClearError] = useState<string | null>(null)
   const [isClearing, startClear] = useTransition()
   const formRef = useRef<HTMLFormElement>(null)
@@ -204,24 +228,10 @@ function AddEntryForm({ total, onCleared }: { total: number; onCleared: () => Pr
           </label>
           <input ref={nameRef} id="pushup-name" name="name" required maxLength={50} className={inputClass} />
         </div>
-        <div>
-          <label htmlFor="pushup-score" className={labelClass}>
-            Valid push-ups
-          </label>
-          <input
-            id="pushup-score"
-            name="score"
-            type="number"
-            required
-            min={0}
-            max={MAX_SCORE}
-            step={1}
-            className={inputClass}
-          />
-        </div>
         <button type="submit" disabled={isPending} className={primaryButtonClass}>
-          {isPending ? 'Saving…' : 'Add Score'}
+          {isPending ? 'Adding…' : 'Add Participant'}
         </button>
+        <p className="text-xs opacity-60">Add everyone in the round, then enter their push-ups once the timer ends.</p>
         {state?.success === false && <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>}
       </form>
 
@@ -239,6 +249,102 @@ function AddEntryForm({ total, onCleared }: { total: number; onCleared: () => Pr
         {clearError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{clearError}</p>}
       </div>
     </div>
+  )
+}
+
+function PendingScores({ pending, phase }: { pending: PendingParticipant[]; phase: TimerPhase }) {
+  const scoresOpen = phase.phase === 'finished'
+  const hint =
+    phase.phase === 'idle'
+      ? 'Start the challenge. Scores open when the timer reaches TIME.'
+      : phase.phase === 'finished'
+        ? 'Round over. Enter each participant’s valid push-ups.'
+        : 'Round in progress. Scores open when the timer reaches TIME.'
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-5 dark:border-white/10">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="font-semibold">Waiting for Score</h2>
+        <span className="text-xs tabular-nums opacity-60">{pending.length}</span>
+      </div>
+      {pending.length === 0 ? (
+        <p className="text-sm opacity-60">No one is waiting. Add participants above.</p>
+      ) : (
+        <>
+          <p className={`text-xs ${scoresOpen ? 'font-medium text-[#b8942a] dark:text-[#d4af37]' : 'opacity-60'}`}>
+            {hint}
+          </p>
+          <ul className="flex flex-col gap-2">
+            {pending.map((participant) => (
+              <PendingRow key={participant.id} participant={participant} scoresOpen={scoresOpen} />
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  )
+}
+
+function PendingRow({ participant, scoresOpen }: { participant: PendingParticipant; scoresOpen: boolean }) {
+  const [score, setScore] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  function save() {
+    if (score === '') return
+    setError(null)
+    startTransition(async () => {
+      const result = await submitPushupScoreAction(participant.id, Number(score))
+      if (!result.success) setError(result.error)
+    })
+  }
+
+  function remove() {
+    if (!confirm(`Remove ${participant.name}?`)) return
+    setError(null)
+    startTransition(async () => {
+      const result = await deletePushupEntryAction(participant.id)
+      if (!result.success) setError(result.error)
+    })
+  }
+
+  return (
+    <li className={`rounded-md border border-black/10 px-3 py-2 dark:border-white/10 ${isPending ? 'opacity-50' : ''}`}>
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{participant.name}</span>
+        <input
+          type="number"
+          aria-label={`Push-ups for ${participant.name}`}
+          placeholder="Reps"
+          min={0}
+          max={MAX_SCORE}
+          step={1}
+          value={score}
+          disabled={!scoresOpen || isPending}
+          onChange={(e) => setScore(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+          className="w-20 rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm disabled:opacity-40 dark:border-white/10"
+        />
+        <button
+          type="button"
+          disabled={!scoresOpen || score === '' || isPending}
+          onClick={save}
+          className="text-xs font-medium hover:underline disabled:opacity-30 disabled:hover:no-underline"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={remove}
+          aria-label={`Remove ${participant.name}`}
+          className="text-xs opacity-60 hover:opacity-100"
+        >
+          ✕
+        </button>
+      </div>
+      {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
+    </li>
   )
 }
 

@@ -1,7 +1,12 @@
 import type { Metadata } from 'next'
 import { PublicChallengeLive } from '@/components/pushup-challenge/PublicChallengeLive'
 import { LEADERBOARD_SIZE, MEDALS, PRIZES, ROUND_SECONDS } from '@/lib/pushup-challenge'
-import { countPushupEntries, getChallengeLiveState, getPushupEntries } from '@/lib/queries/pushup-challenge'
+import {
+  countPushupEntries,
+  getChallengeLiveState,
+  getPendingParticipants,
+  getPushupEntries,
+} from '@/lib/queries/pushup-challenge'
 
 export const metadata: Metadata = {
   title: 'Push-Up Challenge Leaderboard | Rich G Collection',
@@ -9,8 +14,9 @@ export const metadata: Metadata = {
 }
 
 export default async function PushupChallengePage() {
-  const [entries, total, live] = await Promise.all([
+  const [entries, pending, total, live] = await Promise.all([
     getPushupEntries(LEADERBOARD_SIZE),
+    getPendingParticipants(),
     countPushupEntries(),
     getChallengeLiveState(),
   ])
@@ -27,7 +33,7 @@ export default async function PushupChallengePage() {
         <p className="mt-3 opacity-70">One competition · One leaderboard · Top score wins</p>
       </div>
 
-      <PublicChallengeLive initial={live} />
+      <PublicChallengeLive initial={live} roundNames={pending.map((p) => p.name)} />
 
       <div className="mt-12 grid gap-3 sm:grid-cols-3">
         {PRIZES.map((prize) => (

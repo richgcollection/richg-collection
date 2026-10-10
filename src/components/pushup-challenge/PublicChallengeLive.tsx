@@ -5,8 +5,11 @@ import { ChallengeClock } from './ChallengeClock'
 import { useChallengeLive } from './useChallengeLive'
 import { WinnerReveal } from './WinnerReveal'
 
-/** The live parts of the public leaderboard page: synced timer, winner banner and reveal. */
-export function PublicChallengeLive({ initial }: { initial: ChallengeLiveState }) {
+/**
+ * The live parts of the public leaderboard page: synced timer (with the names
+ * of participants still waiting for a score), winner banner and reveal.
+ */
+export function PublicChallengeLive({ initial, roundNames }: { initial: ChallengeLiveState; roundNames: string[] }) {
   const { live, phase } = useChallengeLive(initial)
 
   return (
@@ -27,6 +30,12 @@ export function PublicChallengeLive({ initial }: { initial: ChallengeLiveState }
       {phase.phase !== 'idle' && (
         <div className="mt-12 rounded-lg border border-black/10 px-6 py-10 dark:border-white/10">
           <ChallengeClock phase={phase} size="lg" />
+          {roundNames.length > 0 && (
+            <div className="mt-8 text-center">
+              <div className="text-xs tracking-widest uppercase opacity-60">In this round</div>
+              <div className="mt-2 text-lg font-semibold">{roundNames.join(' · ')}</div>
+            </div>
+          )}
         </div>
       )}
     </>

@@ -1,25 +1,37 @@
 import { prisma } from '@/lib/prisma'
-import type { ChallengeLiveState, PushupEntry } from '@/lib/pushup-challenge'
+import type { ChallengeLiveState, PendingParticipant, PushupEntry } from '@/lib/pushup-challenge'
 
 export const CHALLENGE_STATE_ID = 'default'
 
-/** Highest score first; ties go to whoever posted the score earliest. */
-export function getPushupEntries(take?: number): Promise<PushupEntry[]> {
-  return prisma.pushupEntry.findMany({
-    orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
+/** Scored participants, highest score first; ties go to whoever was scored earliest. */
+export async function getPushupEntries(take?: number): Promise<PushupEntry[]> {
+  const rows = await prisma.pushupEntry.findMany({
+    where: { score: { not: null } },
+    orderBy: [{ score: 'desc' }, { scoredAt: 'asc' }],
     select: { id: true, name: true, score: true },
     take,
   })
+  return rows.map((row) => ({ ...row, score: row.score ?? 0 }))
 }
 
+/** Registered participants still waiting for a score, in the order they signed up. */
+export function getPendingParticipants(): Promise<PendingParticipant[]> {
+  return prisma.pushupEntry.findMany({
+    where: { score: null },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, name: true },
+  })
+}
+
+/** Everyone registered, scored or not. */
 export function countPushupEntries(): Promise<number> {
   return prisma.pushupEntry.count()
 }
 
 /**
  * Everything an open page needs to stay in sync: the timer, the announced
- * winner, and a version stamp that changes whenever an entry is added
- * (count + latest updatedAt), edited (latest updatedAt) or removed (count).
+ * winner, and a version stamp that changes whenever a participant is added
+ * (count + latest updatedAt), scored or edited (latest updatedAt) or removed (count).
  */
 export async function getChallengeLiveState(): Promise<ChallengeLiveState> {
   const [{ _count, _max }, state] = await Promise.all([

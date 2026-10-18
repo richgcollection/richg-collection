@@ -2,7 +2,12 @@
 
 import { useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { deleteAffiliatePayoutAction, setCommissionVoidAction } from '@/lib/actions/admin-affiliates'
+import {
+  deleteAffiliateAction,
+  deleteAffiliatePayoutAction,
+  setAffiliateActiveAction,
+  setCommissionVoidAction,
+} from '@/lib/actions/admin-affiliates'
 import { formatMonth } from '@/lib/affiliate-terms'
 
 const smallButtonClass = 'whitespace-nowrap text-xs underline underline-offset-4 opacity-70 hover:opacity-100 disabled:opacity-40'
@@ -41,6 +46,57 @@ export function PayoutDeleteButton({ payoutId }: { payoutId: string }) {
   return (
     <button type="button" onClick={handleClick} disabled={isPending} className={`${smallButtonClass} text-red-600 dark:text-red-400`}>
       Delete
+    </button>
+  )
+}
+
+const outlineButtonClass =
+  'rounded-full border border-black/10 px-4 py-1.5 text-sm font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10'
+
+export function AffiliateActiveToggle({ affiliateId, isActive }: { affiliateId: string; isActive: boolean }) {
+  const [isPending, startTransition] = useTransition()
+
+  function handleClick() {
+    if (isActive && !confirm('Deactivate this affiliate? Their links stop earning commission and their dashboard is locked. Their history is kept.')) {
+      return
+    }
+    startTransition(async () => {
+      const result = await setAffiliateActiveAction({ affiliateId, active: !isActive })
+      if (!result.success) alert(result.error)
+    })
+  }
+
+  return (
+    <button type="button" onClick={handleClick} disabled={isPending} className={outlineButtonClass}>
+      {isPending ? 'Saving…' : isActive ? 'Deactivate' : 'Activate'}
+    </button>
+  )
+}
+
+export function AffiliateDeleteButton({ affiliateId, name }: { affiliateId: string; name: string }) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  function handleClick() {
+    const typed = prompt(
+      `Delete ${name} permanently? This removes their account, commissions and payout records. Their orders stay but lose the affiliate link.\n\nType DELETE to confirm.`,
+    )
+    if (typed?.trim().toUpperCase() !== 'DELETE') return
+    startTransition(async () => {
+      const result = await deleteAffiliateAction(affiliateId)
+      if (result.success) router.push('/admin/affiliates')
+      else alert(result.error)
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={isPending}
+      className={`${outlineButtonClass} border-red-600/30 text-red-600 hover:bg-red-600/10 dark:border-red-400/30 dark:text-red-400`}
+    >
+      {isPending ? 'Deleting…' : 'Delete affiliate'}
     </button>
   )
 }

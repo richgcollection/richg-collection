@@ -14,7 +14,12 @@ import {
   thClass,
   thNumClass,
 } from '@/components/affiliate/ui'
-import { CommissionVoidButton, PayoutDeleteButton } from '@/components/admin/affiliates/AffiliateButtons'
+import {
+  AffiliateActiveToggle,
+  AffiliateDeleteButton,
+  CommissionVoidButton,
+  PayoutDeleteButton,
+} from '@/components/admin/affiliates/AffiliateButtons'
 import { AffiliateProfileForm, MarkMonthPaidForm } from '@/components/admin/affiliates/AffiliateForms'
 import { ResendInviteButton } from '@/components/admin/affiliates/AffiliateInvite'
 import { AffiliateProductsManager } from '@/components/admin/affiliates/AffiliateProductsManager'
@@ -89,6 +94,10 @@ export default async function AdminAffiliateDetailPage({ params }: { params: Pro
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">{affiliate.name}</h1>
         <AffiliateStatusBadge status={affiliate.status} />
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <AffiliateActiveToggle affiliateId={affiliate.id} isActive={affiliate.status === 'ACTIVE'} />
+          <AffiliateDeleteButton affiliateId={affiliate.id} name={affiliate.name} />
+        </div>
       </div>
       <p className="mt-1 text-sm opacity-60 [overflow-wrap:anywhere]">
         {affiliate.email}

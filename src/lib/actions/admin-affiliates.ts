@@ -318,6 +318,44 @@ export async function markAffiliateMonthPaidAction(
   return { success: true }
 }
 
+/** Deactivating (SUSPENDED) stops new commissions and locks the dashboard; history is kept. */
+export async function setAffiliateActiveAction(input: { affiliateId: string; active: boolean }): Promise<ActionResult> {
+  await requireAdmin()
+  const parsed = z.object({ affiliateId: z.string().min(1), active: z.boolean() }).safeParse(input)
+  if (!parsed.success) return { success: false, error: 'Invalid affiliate.' }
+
+  const { count } = await prisma.affiliate.updateMany({
+    where: { id: parsed.data.affiliateId },
+    data: { status: parsed.data.active ? 'ACTIVE' : 'SUSPENDED' },
+  })
+  if (count === 0) return { success: false, error: 'Affiliate not found.' }
+  revalidateAffiliate(parsed.data.affiliateId)
+  return { success: true }
+}
+
+/** Permanently removes an affiliate with their commissions and payouts; their orders stay, unattributed. */
+export async function deleteAffiliateAction(affiliateId: string): Promise<ActionResult> {
+  await requireAdmin()
+  const parsed = z.string().min(1).safeParse(affiliateId)
+  if (!parsed.success) return { success: false, error: 'Invalid affiliate.' }
+
+  try {
+    await prisma.$transaction([
+      prisma.affiliateCommission.deleteMany({ where: { affiliateId: parsed.data } }),
+      prisma.affiliatePayout.deleteMany({ where: { affiliateId: parsed.data } }),
+      prisma.affiliate.delete({ where: { id: parsed.data } }),
+    ])
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return { success: false, error: 'Affiliate not found.' }
+    }
+    throw error
+  }
+  revalidateAffiliate()
+  revalidatePath('/admin/orders')
+  return { success: true }
+}
+
 /** Undoes a payout recorded by mistake; its commission lines become unpaid again. */
 export async function deleteAffiliatePayoutAction(payoutId: string): Promise<ActionResult> {
   await requireAdmin()

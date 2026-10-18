@@ -16,6 +16,7 @@ import { requireAffiliate } from '@/lib/auth/affiliate-dal'
 import { formatKes } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { REFERRAL_PARAM } from '@/lib/referral'
+import { siteUrl as getSiteUrl } from '@/lib/site-url'
 
 export const metadata = { title: 'Affiliate Dashboard · Rich G Collection' }
 
@@ -64,7 +65,7 @@ export default async function AffiliateDashboardPage() {
   const summary = summarizeLedger(ledger)
   const statement = buildMonthlyStatement(ledger)
 
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  const siteUrl = getSiteUrl()
   const refQuery = `?${REFERRAL_PARAM}=${encodeURIComponent(affiliate.referralCode)}`
 
   return (

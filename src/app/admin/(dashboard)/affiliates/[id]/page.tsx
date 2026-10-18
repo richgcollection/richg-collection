@@ -30,6 +30,7 @@ import { formatStoreDate, formatStoreDateTime } from '@/lib/dates'
 import { formatKes } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { REFERRAL_PARAM } from '@/lib/referral'
+import { siteUrl as getSiteUrl } from '@/lib/site-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,7 +76,7 @@ export default async function AdminAffiliateDetailPage({ params }: { params: Pro
   const summary = summarizeLedger(ledger)
   const statement = buildMonthlyStatement(ledger)
   const defaultTerms = formatCommissionTerms(affiliate.commissionType, affiliate.commissionValue)
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  const siteUrl = getSiteUrl()
   const inviteUnclaimed = !affiliate.passwordHash
   const inviteExpired = inviteUnclaimed && !isInviteOpen(affiliate.inviteExpiresAt)
   const dashboardUrl = `${siteUrl}/affiliate`

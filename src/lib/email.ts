@@ -1,4 +1,5 @@
 import 'server-only'
+import { siteUrl } from '@/lib/site-url'
 
 export type SendEmailResult =
   | { ok: true; id?: string }
@@ -16,9 +17,7 @@ export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
 }
 
-export function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-}
+export { siteUrl }
 
 export function escapeHtml(value: string) {
   return value

@@ -8,6 +8,7 @@ import { createPendingOrder } from '@/lib/orders'
 import { initializeTransaction, isPaystackConfigured } from '@/lib/paystack'
 import { prisma } from '@/lib/prisma'
 import { getShippingRateForTown } from '@/lib/shipping'
+import { siteUrl } from '@/lib/site-url'
 
 const shippingAddressSchema = z.object({
   fullName: z.string().trim().min(2, 'Enter your full name.'),
@@ -64,7 +65,7 @@ export async function placeOrderAction(
     redirect(`/checkout/success?order=${order.orderNumber}&payment=pending-setup`)
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+  const origin = siteUrl()
 
   // `redirect()` throws internally, so keep it out of the try block —
   // otherwise this catch would also swallow the successful-redirect throw.
@@ -74,7 +75,7 @@ export async function placeOrderAction(
       email: parsed.data.email,
       amountKes: order.totalKes,
       reference: order.orderNumber,
-      callbackUrl: `${siteUrl}/checkout/success`,
+      callbackUrl: `${origin}/checkout/success`,
       metadata: { orderNumber: order.orderNumber },
     })
     authorizationUrl = transaction.data.authorization_url

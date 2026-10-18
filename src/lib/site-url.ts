@@ -1,12 +1,13 @@
+const PRODUCTION_ORIGIN = 'https://richgcollection.com'
+
 /**
- * The public origin for absolute links (emails, invites, payment callbacks).
- * NEXT_PUBLIC_SITE_URL wins; on Vercel we fall back to the project's production domain
- * so links never point at localhost just because the variable was left unset.
+ * The public origin for absolute links (emails, invites, referral links, payment callbacks).
+ * NEXT_PUBLIC_SITE_URL wins; any Vercel deploy falls back to the storefront domain
+ * so links never point at localhost (or another project domain) when the variable is unset.
  */
 export function siteUrl() {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim()
   if (configured) return configured.replace(/\/$/, '')
-  const vercelDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
-  if (vercelDomain) return `https://${vercelDomain.replace(/\/$/, '')}`
+  if (process.env.VERCEL) return PRODUCTION_ORIGIN
   return 'http://localhost:3000'
 }

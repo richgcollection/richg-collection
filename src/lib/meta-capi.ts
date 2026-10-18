@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
+import { siteUrl } from '@/lib/site-url'
 
 // Meta Conversions API: reports purchases server-side so they're counted even
 // when the browser pixel is blocked or the customer never reaches the success
@@ -56,7 +57,7 @@ export async function sendMetaPurchaseEvent(orderId: string): Promise<void> {
     const externalId = order.customerId ?? email
     if (externalId) userData.external_id = [sha256(externalId)]
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.richgcollection.com'
+    const origin = siteUrl()
 
     const body = {
       data: [
@@ -65,7 +66,7 @@ export async function sendMetaPurchaseEvent(orderId: string): Promise<void> {
           event_time: Math.floor(Date.now() / 1000),
           event_id: order.orderNumber,
           action_source: 'website',
-          event_source_url: `${siteUrl}/checkout/success`,
+          event_source_url: `${origin}/checkout/success`,
           user_data: userData,
           custom_data: {
             currency: 'KES',

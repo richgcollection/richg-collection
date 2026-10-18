@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { getCurrentAdmin, isAdminRole } from '@/lib/auth/dal'
+import { netDeductedUnits } from '@/lib/order-stock'
 import { formatKes } from '@/lib/money'
 import { formatStoreDate, formatStoreDateTime } from '@/lib/dates'
 import { OrderStatusSelect } from '@/components/admin/OrderStatusSelect'
@@ -25,6 +27,7 @@ export default async function AdminOrdersPage({
   const { status } = await searchParams
   const activeStatus = STATUS_FILTERS.some((f) => f.value === status) ? (status as OrderStatus) : undefined
 
+  const canDelete = isAdminRole(await getCurrentAdmin())
   const orders = await prisma.order.findMany({
     where: activeStatus ? { status: activeStatus } : undefined,
     orderBy: { createdAt: 'desc' },
@@ -37,7 +40,9 @@ export default async function AdminOrdersPage({
       paymentStatus: true,
       createdAt: true,
       statusEvents: { orderBy: { occurredAt: 'desc' }, take: 1, select: { occurredAt: true } },
-      items: { select: { productId: true, variantId: true, nameSnapshot: true, variantSnapshot: true } },
+      items: {
+        select: { productId: true, variantId: true, nameSnapshot: true, variantSnapshot: true, quantity: true },
+      },
       stockMovements: {
         orderBy: { createdAt: 'asc' },
         select: {
@@ -81,7 +86,11 @@ export default async function AdminOrdersPage({
             <th className="py-2">Payment</th>
             <th className="py-2">Status</th>
             <th className="py-2">Date</th>
-            <th className="py-2"><span className="sr-only">Actions</span></th>
+            {canDelete && (
+              <th className="py-2">
+                <span className="sr-only">Actions</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -98,26 +107,35 @@ export default async function AdminOrdersPage({
                 <StatusPill value={order.paymentStatus} />
               </td>
               <td className="py-3">
-                <OrderStatusSelect orderId={order.id} status={order.status} />
+                <OrderStatusSelect
+                  orderId={order.id}
+                  status={order.status}
+                  paymentStatus={order.paymentStatus}
+                  linkedUnits={netDeductedUnits(order.stockMovements)}
+                  itemUnits={order.items.reduce((sum, item) => sum + item.quantity, 0)}
+                />
                 {order.statusEvents[0] && (
                   <p className="mt-1 text-xs opacity-60">{formatStoreDateTime(order.statusEvents[0].occurredAt)}</p>
                 )}
               </td>
               <td className="py-3 opacity-60">{formatStoreDate(order.createdAt)}</td>
-              <td className="py-3 text-right">
-                <OrderDeleteButton
-                  orderId={order.id}
-                  orderNumber={order.orderNumber}
-                  items={order.items}
-                  movements={order.stockMovements}
-                  compact
-                />
-              </td>
+              {canDelete && (
+                <td className="py-3 text-right">
+                  <OrderDeleteButton
+                    orderId={order.id}
+                    orderNumber={order.orderNumber}
+                    status={order.status}
+                    items={order.items}
+                    movements={order.stockMovements}
+                    compact
+                  />
+                </td>
+              )}
             </tr>
           ))}
           {orders.length === 0 && (
             <tr>
-              <td colSpan={7} className="py-8 text-center opacity-60">
+              <td colSpan={canDelete ? 7 : 6}className="py-8 text-center opacity-60">
                 No orders yet.
               </td>
             </tr>

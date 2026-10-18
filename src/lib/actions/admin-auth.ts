@@ -4,6 +4,13 @@ import bcrypt from 'bcryptjs'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { createAdminSession, deleteAdminSession } from '@/lib/auth/session'
+import {
+  THROTTLED_MESSAGE,
+  clearFailedAttempts,
+  isThrottled,
+  recordFailedAttempt,
+  throttleKey,
+} from '@/lib/auth/rate-limit'
 import { prisma } from '@/lib/prisma'
 
 const loginSchema = z.object({
@@ -12,6 +19,9 @@ const loginSchema = z.object({
 })
 
 export type AdminLoginState = { error?: string } | undefined
+
+// Compared against when there's no usable account, so a miss takes as long as a wrong password (same cost as the seed's hashes).
+const DUMMY_HASH = '$2b$10$TIggmy0.qFrEsIPcSgLHIeCYh.8pUOtMZhuH12KSM2WmxUunRBN2u'
 
 export async function adminLoginAction(
   _prevState: AdminLoginState,
@@ -25,17 +35,22 @@ export async function adminLoginAction(
     return { error: 'Enter a valid email and password.' }
   }
 
+  const key = await throttleKey('admin-login', parsed.data.email)
+  if (await isThrottled(key)) return { error: THROTTLED_MESSAGE }
+
   const user = await prisma.user.findUnique({ where: { email: parsed.data.email } })
-  if (!user || !user.passwordHash || (user.role !== 'ADMIN' && user.role !== 'STAFF')) {
+  const account =
+    user?.passwordHash && (user.role === 'ADMIN' || user.role === 'STAFF')
+      ? { id: user.id, role: user.role, passwordHash: user.passwordHash }
+      : null
+  const passwordMatches = await bcrypt.compare(parsed.data.password, account?.passwordHash ?? DUMMY_HASH)
+  if (!account || !passwordMatches) {
+    await recordFailedAttempt(key)
     return { error: 'Invalid email or password.' }
   }
 
-  const passwordMatches = await bcrypt.compare(parsed.data.password, user.passwordHash)
-  if (!passwordMatches) {
-    return { error: 'Invalid email or password.' }
-  }
-
-  await createAdminSession({ userId: user.id, role: user.role })
+  await clearFailedAttempts(key)
+  await createAdminSession({ userId: account.id, role: account.role })
   redirect('/admin')
 }
 

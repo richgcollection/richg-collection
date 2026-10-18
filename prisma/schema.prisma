@@ -413,6 +413,13 @@ model Affiliate {
   commissionType  CommissionType  @default(PERCENT)
   commissionValue Int             @default(1000)
   invitedAt       DateTime?
+  /// SHA-256 of the single-use invite token emailed to the affiliate; cleared once claimed.
+  inviteTokenHash String?         @unique
+  /// The raw invite token, kept so admins can re-copy the link (email may be unavailable); cleared once claimed.
+  inviteToken     String?
+  inviteExpiresAt DateTime?
+  inviteSentAt    DateTime?
+  inviteClaimedAt DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -488,4 +495,17 @@ model AffiliatePayout {
   commissions AffiliateCommission[]
 
   @@index([affiliateId, periodMonth])
+}
+
+/// A failed sign-in (or a signup attempt), for DB-backed rate limiting. Keys are keyed hashes, never raw IPs or emails.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  scope     String
+  ipHash    String
+  emailHash String
+  createdAt DateTime @default(now())
+
+  @@index([scope, ipHash, createdAt])
+  @@index([scope, emailHash, ipHash, createdAt])
+  @@index([createdAt])
 }

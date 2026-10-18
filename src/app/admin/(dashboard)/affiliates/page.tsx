@@ -14,6 +14,7 @@ import {
   thNumClass,
 } from '@/components/affiliate/ui'
 import { formatMonth, isMonthKey, monthKey, shiftMonth } from '@/lib/affiliate-terms'
+import { isInviteOpen } from '@/lib/affiliate-invites'
 import { getLedger, ledgersByAffiliate, positionAtMonthEnd, summarizeLedger } from '@/lib/affiliates'
 import { formatKes } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
@@ -37,6 +38,7 @@ export default async function AdminAffiliatesPage({ searchParams }: { searchPara
         status: true,
         referralCode: true,
         invitedAt: true,
+        inviteExpiresAt: true,
         passwordHash: true,
         _count: { select: { products: true } },
       },
@@ -128,7 +130,11 @@ export default async function AdminAffiliatesPage({ searchParams }: { searchPara
                     <p className="text-xs opacity-60 [overflow-wrap:anywhere]">{affiliate.email}</p>
                     <p className="font-mono text-xs opacity-60">
                       {affiliate.referralCode}
-                      {affiliate.invitedAt && !affiliate.passwordHash ? ' · invite not claimed' : ''}
+                      {!affiliate.passwordHash
+                        ? isInviteOpen(affiliate.inviteExpiresAt)
+                          ? ' · invite not claimed'
+                          : ' · invite expired'
+                        : ''}
                     </p>
                   </td>
                   <td className={tdClass}>

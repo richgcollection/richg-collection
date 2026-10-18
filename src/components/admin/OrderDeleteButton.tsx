@@ -2,7 +2,8 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { deleteOrderAction } from '@/lib/actions/admin-orders'
-import type { StockDirection } from '@prisma/client'
+import { isStockReturnedStatus } from '@/lib/order-stock'
+import type { OrderStatus, StockDirection } from '@prisma/client'
 
 export type DeletableOrderItem = {
   productId: string
@@ -23,6 +24,7 @@ export type DeletableOrderMovement = {
 export function OrderDeleteButton({
   orderId,
   orderNumber,
+  status,
   items,
   movements,
   redirectToList = false,
@@ -30,6 +32,7 @@ export function OrderDeleteButton({
 }: {
   orderId: string
   orderNumber: string
+  status: OrderStatus
   items: DeletableOrderItem[]
   movements: DeletableOrderMovement[]
   /** Go to the orders list afterwards (when used on the order's own page). */
@@ -140,8 +143,8 @@ export function OrderDeleteButton({
                     <span className="font-medium">Delete, keep inventory as is</span>
                     <span className="mt-1 block text-xs opacity-70">
                       For when the goods actually left. Stock stays as it is and the sale stays in the ledger and
-                      analytics, no longer linked to an order. If the order was real, consider setting its status to
-                      Cancelled or Refunded instead of deleting it.
+                      analytics, no longer linked to an order. If the order was real but cancelled or returned,
+                      set its status to Cancelled or Refunded instead: that keeps the order and returns its stock.
                     </span>
                   </span>
                 </label>
@@ -149,7 +152,9 @@ export function OrderDeleteButton({
             </>
           ) : (
             <p className="mt-4 rounded-md border border-black/10 p-3 dark:border-white/10">
-              This order never deducted inventory (it was not marked as paid), so no stock changes are needed.
+              {isStockReturnedStatus(status)
+                ? `This order’s stock was already returned when it was set to ${status.toLowerCase()}, so no stock changes are needed.`
+                : 'This order never deducted inventory (it was not marked as paid), so no stock changes are needed.'}
             </p>
           )}
 

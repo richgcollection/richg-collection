@@ -134,10 +134,10 @@ export function ChartCard({
   legend?: Array<{ label: string; color: string; shape?: 'line' | 'box' }>
   table?: TableData
   children: ReactNode
-  /** Layout classes (e.g. column spans); replaced by a full-width span while details are open. */
+  /** Layout classes (e.g. column spans). */
   className?: string
   action?: ReactNode
-  /** Drill-down shown under the chart when "Details" is pressed. */
+  /** Short explanation shown under the chart when "Details" is pressed. */
   details?: ReactNode
   detailsLabel?: string
 }) {
@@ -146,7 +146,7 @@ export function ChartCard({
   const expanded = Boolean(details) && d.open
   return (
     <section
-      className={`min-w-0 rounded-lg border bg-surface p-5 ${expanded ? 'col-span-full border-foreground/25' : `border-black/10 dark:border-white/10 ${className}`}`}
+      className={`min-w-0 rounded-lg border bg-surface p-5 ${className} ${expanded ? 'border-foreground/25' : 'border-black/10 dark:border-white/10'}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -872,6 +872,7 @@ export function StatTile({
   spark,
   hint,
   hero = false,
+  wideDetails = false,
   children,
 }: {
   label: string
@@ -882,7 +883,9 @@ export function StatTile({
   hint?: string
   /** Spans the full row of the tile grid. */
   hero?: boolean
-  /** Drill-down revealed by the tile's "Details" button; the tile then spans the full row. */
+  /** The open panel needs room (e.g. a list of carts), so the tile spans the full row while expanded. */
+  wideDetails?: boolean
+  /** Panel revealed by the tile's "Details" button. */
   children?: ReactNode
 }) {
   const hasDelta = deltaPct !== undefined && deltaPct !== null && Number.isFinite(deltaPct)
@@ -891,7 +894,7 @@ export function StatTile({
   const expanded = Boolean(children) && d.open
   return (
     <div
-      className={`min-w-0 rounded-lg border bg-surface p-4 ${hero || expanded ? 'col-span-full' : ''} ${expanded ? 'border-foreground/25' : 'border-black/10 dark:border-white/10'}`}
+      className={`min-w-0 rounded-lg border bg-surface p-4 ${hero || (expanded && wideDetails) ? 'col-span-full' : ''} ${expanded ? 'border-foreground/25' : 'border-black/10 dark:border-white/10'}`}
     >
       {/* Container query context: the figure scales with the tile, never with the viewport. */}
       <div className={`@container min-w-0 ${children ? 'cursor-pointer' : ''}`} onClick={children ? d.toggle : undefined}>

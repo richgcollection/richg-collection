@@ -5,6 +5,7 @@ import type { Cart } from '@/lib/cart'
 import { upsertCustomerFromOrder } from '@/lib/customers'
 import { applyOrderStockOut } from '@/lib/inventory'
 import { sendMetaPurchaseEvent } from '@/lib/meta-capi'
+import { isStockReturnedStatus } from '@/lib/order-stock'
 
 export function generateOrderNumber(): string {
   const year = new Date().getFullYear()
@@ -73,25 +74,37 @@ export async function createPendingOrder(
  * and the admin "mark as paid" action. Returns false if the order was already
  * paid — the conditional update makes concurrent callers safe, so stock is
  * only ever deducted once.
+ *
+ * If the order was already cancelled/refunded/failed, the payment is recorded
+ * but the status, stock and Meta event are left alone: reactivating the order
+ * from the admin deducts stock then.
  */
 export async function markOrderPaid(orderId: string, createdById?: string): Promise<boolean> {
-  const transitioned = await prisma.$transaction(async (tx) => {
+  const outcome = await prisma.$transaction(async (tx) => {
+    // Also row-locks the order, so this waits for an in-flight status change.
     const { count } = await tx.order.updateMany({
       where: { id: orderId, paymentStatus: { not: 'PAID' } },
-      data: { paymentStatus: 'PAID', status: 'PROCESSING' },
+      data: { paymentStatus: 'PAID' },
     })
-    if (count === 0) return false
+    if (count === 0) return 'already-paid'
 
+    const { status } = await tx.order.findUniqueOrThrow({ where: { id: orderId }, select: { status: true } })
+    if (isStockReturnedStatus(status)) {
+      await syncAffiliateCommissions(tx, orderId)
+      return 'paid-inactive'
+    }
+
+    await tx.order.update({ where: { id: orderId }, data: { status: 'PROCESSING' } })
     await tx.orderStatusEvent.create({
       data: { orderId, status: 'PROCESSING', occurredAt: new Date(), createdById },
     })
     await applyOrderStockOut(tx, orderId)
     await syncAffiliateCommissions(tx, orderId)
-    return true
+    return 'paid'
   })
 
-  if (transitioned) {
+  if (outcome === 'paid') {
     after(() => sendMetaPurchaseEvent(orderId))
   }
-  return transitioned
+  return outcome !== 'already-paid'
 }

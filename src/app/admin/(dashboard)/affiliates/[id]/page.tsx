@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ReferralLink } from '@/components/affiliate/CopyButton'
+import { CopyButton, ReferralLink } from '@/components/affiliate/CopyButton'
 import { CommissionsTable, MonthlyStatementTable } from '@/components/affiliate/tables'
 import {
   AffiliateStatusBadge,
@@ -16,10 +16,12 @@ import {
 } from '@/components/affiliate/ui'
 import { CommissionVoidButton, PayoutDeleteButton } from '@/components/admin/affiliates/AffiliateButtons'
 import { AffiliateProfileForm, MarkMonthPaidForm } from '@/components/admin/affiliates/AffiliateForms'
+import { ResendInviteButton } from '@/components/admin/affiliates/AffiliateInvite'
 import { AffiliateProductsManager } from '@/components/admin/affiliates/AffiliateProductsManager'
 import { formatCommissionTerms, formatMonth } from '@/lib/affiliate-terms'
+import { inviteUrl, isInviteOpen } from '@/lib/affiliate-invites'
 import { buildMonthlyStatement, getLedger, summarizeLedger } from '@/lib/affiliates'
-import { formatStoreDate } from '@/lib/dates'
+import { formatStoreDate, formatStoreDateTime } from '@/lib/dates'
 import { formatKes } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { REFERRAL_PARAM } from '@/lib/referral'
@@ -42,6 +44,10 @@ export default async function AdminAffiliateDetailPage({ params }: { params: Pro
         commissionType: true,
         commissionValue: true,
         invitedAt: true,
+        inviteSentAt: true,
+        inviteExpiresAt: true,
+        inviteClaimedAt: true,
+        inviteToken: true,
         passwordHash: true,
         createdAt: true,
         products: {
@@ -66,6 +72,14 @@ export default async function AdminAffiliateDetailPage({ params }: { params: Pro
   const defaultTerms = formatCommissionTerms(affiliate.commissionType, affiliate.commissionValue)
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
   const inviteUnclaimed = !affiliate.passwordHash
+  const inviteExpired = inviteUnclaimed && !isInviteOpen(affiliate.inviteExpiresAt)
+  const dashboardUrl = `${siteUrl}/affiliate`
+  const openInviteUrl =
+    inviteUnclaimed && !inviteExpired && affiliate.inviteToken ? inviteUrl(affiliate.inviteToken) : null
+  const firstName = affiliate.name.split(/\s+/)[0] || affiliate.name
+  const shareMessage = openInviteUrl
+    ? `Hi ${firstName}, your Rich G affiliate account is ready.\n\n1. Set your password here (one-time link, valid until ${formatStoreDate(affiliate.inviteExpiresAt!)}):\n${openInviteUrl}\n\n2. After that, your dashboard is always at:\n${dashboardUrl}\n\nBookmark it to check your sales and commission.`
+    : `Hi ${firstName}, your Rich G affiliate dashboard is at:\n${dashboardUrl}\n\nSign in with your email and password to check your sales and commission.`
 
   return (
     <div className="min-w-0 [contain:inline-size]">
@@ -79,8 +93,65 @@ export default async function AdminAffiliateDetailPage({ params }: { params: Pro
       <p className="mt-1 text-sm opacity-60 [overflow-wrap:anywhere]">
         {affiliate.email}
         {affiliate.phone ? ` · ${affiliate.phone}` : ''} · Joined {formatStoreDate(affiliate.createdAt)}
-        {inviteUnclaimed ? ' · Invite not claimed yet (no password set)' : ''}
       </p>
+
+      {(inviteUnclaimed || affiliate.inviteClaimedAt) && (
+        <section className="mt-6 flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <div>
+            <p className="font-medium">Invite</p>
+            <p className="text-sm opacity-70">
+              {affiliate.inviteClaimedAt
+                ? `Claimed ${formatStoreDateTime(affiliate.inviteClaimedAt)}`
+                : !affiliate.inviteSentAt || !affiliate.inviteExpiresAt
+                  ? 'Not claimed. No invite link has been sent yet — send one so they can set a password.'
+                  : inviteExpired
+                    ? `Expired ${formatStoreDateTime(affiliate.inviteExpiresAt)} (sent ${formatStoreDateTime(affiliate.inviteSentAt)}) — not claimed.`
+                    : `Sent ${formatStoreDateTime(affiliate.inviteSentAt)} · expires ${formatStoreDateTime(affiliate.inviteExpiresAt)} · not claimed yet`}
+            </p>
+          </div>
+          {inviteUnclaimed && (
+            <ResendInviteButton
+              affiliateId={affiliate.id}
+              label={affiliate.inviteSentAt ? 'New invite link' : 'Create invite link'}
+            />
+          )}
+        </section>
+      )}
+
+      <section className="mt-6 flex flex-col gap-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
+        <div>
+          <p className="font-medium">Affiliate portal links</p>
+          <p className="text-sm opacity-70">Copy these and send them yourself (e.g. on WhatsApp).</p>
+        </div>
+        {inviteUnclaimed && (
+          <div>
+            <p className="mb-2 text-xs font-medium tracking-wide uppercase opacity-70">
+              Invite link · set password (one-time)
+            </p>
+            {openInviteUrl ? (
+              <ReferralLink url={openInviteUrl} />
+            ) : (
+              <p className="text-sm opacity-70">
+                {inviteExpired && affiliate.inviteExpiresAt ? 'The last invite link expired.' : 'No invite link available.'}{' '}
+                Use the button above to create a new one.
+              </p>
+            )}
+          </div>
+        )}
+        <div>
+          <p className="mb-2 text-xs font-medium tracking-wide uppercase opacity-70">Dashboard link · permanent</p>
+          <ReferralLink url={dashboardUrl} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-2">
+          <p className="text-xs font-medium tracking-wide uppercase opacity-70">Message to send</p>
+          <pre className="min-w-0 rounded-md bg-surface px-3 py-2 font-sans text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
+            {shareMessage}
+          </pre>
+          <div>
+            <CopyButton value={shareMessage} label="Copy message" />
+          </div>
+        </div>
+      </section>
 
       <section className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="This month" value={formatKes(summary.thisMonth.earnedKes)} hint={`${summary.thisMonth.units} units`} />

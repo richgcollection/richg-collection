@@ -21,9 +21,12 @@ export function saleRevenueKes(m: { unitPriceKes: number | null; quantity: numbe
  * per line item, snapshotting the product's cost price so profit can be
  * computed later even if the cost price changes afterwards. Shared by the
  * Paystack webhook and the "mark paid manually" admin action so stock is
- * never decremented without a matching ledger entry.
+ * never decremented without a matching ledger entry. Does nothing if the
+ * order already has OUT movements, so it never deducts twice.
  */
 export async function applyOrderStockOut(tx: TxClient, orderId: string) {
+  if ((await tx.stockMovement.count({ where: { orderId, direction: 'OUT' } })) > 0) return
+
   const items = await tx.orderItem.findMany({
     where: { orderId },
     include: { product: { select: { costPriceKes: true } } },
@@ -57,7 +60,28 @@ export async function applyOrderStockOut(tx: TxClient, orderId: string) {
   }
 }
 
-export type StockActionResult = { success: true } | { success: false; error: string }
+/**
+ * Reverses every StockMovement linked to an order: stockQty counters are put
+ * back and the movements deleted, so analytics no longer count the sale. Used
+ * when an order is cancelled/refunded/failed and when deleting with restore.
+ */
+export async function restoreOrderStock(tx: TxClient, orderId: string) {
+  const movements = await tx.stockMovement.findMany({
+    where: { orderId },
+    select: { productId: true, variantId: true, direction: true, quantity: true },
+  })
+  for (const m of movements) {
+    const delta = m.direction === 'OUT' ? { increment: m.quantity } : { decrement: m.quantity }
+    if (m.variantId) {
+      await tx.productVariant.update({ where: { id: m.variantId }, data: { stockQty: delta } })
+    } else {
+      await tx.product.update({ where: { id: m.productId }, data: { stockQty: delta } })
+    }
+  }
+  await tx.stockMovement.deleteMany({ where: { orderId } })
+}
+
+export type StockActionResult ={ success: true } | { success: false; error: string }
 
 class InsufficientStockError extends Error {}
 

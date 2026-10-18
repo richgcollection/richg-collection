@@ -3,9 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
-import { requireAdmin } from '@/lib/auth/dal'
+import { requireAdmin, requireAdminRole } from '@/lib/auth/dal'
 import { prisma } from '@/lib/prisma'
 import { markOrderPaid } from '@/lib/orders'
+import { applyOrderStockOut, restoreOrderStock } from '@/lib/inventory'
+import { isStockReturnedStatus } from '@/lib/order-stock'
 import { syncAffiliateCommissions } from '@/lib/affiliates'
 import { parseStoreDateTime } from '@/lib/dates'
 import type { ActionResult } from '@/lib/actions/cart'
@@ -47,25 +49,41 @@ export async function updateOrderStatusAction(formData: FormData): Promise<Actio
     occurredAt = date
   }
 
-  await prisma.$transaction([
-    prisma.order.update({
-      where: { id: parsed.data.orderId },
-      data: { status: parsed.data.status },
-    }),
-    prisma.orderStatusEvent.create({
-      data: {
-        orderId: parsed.data.orderId,
-        status: parsed.data.status,
-        occurredAt,
-        createdById: admin.id,
-      },
-    }),
-  ])
-  // Cancel/refund/fail voids affiliate commission; COMPLETED approves it.
-  await prisma.$transaction((tx) => syncAffiliateCommissions(tx, parsed.data.orderId))
+  const { orderId, status } = parsed.data
+  const found = await prisma.$transaction(async (tx) => {
+    // Row-locks the order so the Paystack webhook (markOrderPaid) can't deduct stock mid-change.
+    const { count } = await tx.order.updateMany({ where: { id: orderId }, data: { updatedAt: new Date() } })
+    if (count === 0) return false
 
-  revalidatePath(`/admin/orders/${parsed.data.orderId}`)
+    const current = await tx.order.findUniqueOrThrow({
+      where: { id: orderId },
+      select: { status: true, paymentStatus: true },
+    })
+    await tx.order.update({ where: { id: orderId }, data: { status } })
+    await tx.orderStatusEvent.create({
+      data: { orderId, status, occurredAt, createdById: admin.id },
+    })
+
+    // Cancelled/refunded/failed orders hold no stock; reactivating a paid one deducts it again.
+    const wasReturned = isStockReturnedStatus(current.status)
+    const isReturned = isStockReturnedStatus(status)
+    if (!wasReturned && isReturned) {
+      await restoreOrderStock(tx, orderId)
+    } else if (wasReturned && !isReturned && current.paymentStatus === 'PAID') {
+      await applyOrderStockOut(tx, orderId)
+    }
+    return true
+  })
+  if (!found) return { success: false, error: 'Order not found.' }
+
+  // Cancel/refund/fail voids affiliate commission; COMPLETED approves it.
+  await prisma.$transaction((tx) => syncAffiliateCommissions(tx, orderId))
+
+  revalidatePath(`/admin/orders/${orderId}`)
   revalidatePath('/admin/orders')
+  revalidatePath('/admin/inventory')
+  revalidatePath('/admin/analytics')
+  revalidatePath('/admin')
   return { success: true }
 }
 
@@ -112,7 +130,7 @@ class OrderChangedError extends Error {}
  * stay in the ledger with orderId cleared and a note naming the order.
  */
 export async function deleteOrderAction(input: z.input<typeof deleteSchema>): Promise<ActionResult> {
-  await requireAdmin()
+  if (!(await requireAdminRole())) return { success: false, error: 'Only an admin can delete orders.' }
 
   const parsed = deleteSchema.safeParse(input)
   if (!parsed.success) return { success: false, error: 'Invalid request.' }
@@ -130,7 +148,7 @@ export async function deleteOrderAction(input: z.input<typeof deleteSchema>): Pr
       })
       const movements = await tx.stockMovement.findMany({
         where: { orderId },
-        select: { id: true, productId: true, variantId: true, direction: true, quantity: true, note: true },
+        select: { id: true, note: true },
       })
 
       const expected = new Set(expectedMovementIds)
@@ -139,15 +157,7 @@ export async function deleteOrderAction(input: z.input<typeof deleteSchema>): Pr
       }
 
       if (mode === 'restore') {
-        for (const m of movements) {
-          const delta = m.direction === 'OUT' ? { increment: m.quantity } : { decrement: m.quantity }
-          if (m.variantId) {
-            await tx.productVariant.update({ where: { id: m.variantId }, data: { stockQty: delta } })
-          } else {
-            await tx.product.update({ where: { id: m.productId }, data: { stockQty: delta } })
-          }
-        }
-        await tx.stockMovement.deleteMany({ where: { orderId } })
+        await restoreOrderStock(tx, orderId)
       } else {
         const marker = `Order ${order.orderNumber} was deleted; stock kept as sold.`
         for (const m of movements) {

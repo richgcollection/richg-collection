@@ -22,3 +22,16 @@ export async function requireAdmin() {
   if (!admin) redirect('/admin/login')
   return admin
 }
+
+export function isAdminRole(user: { role: string } | null): boolean {
+  return user?.role === 'ADMIN'
+}
+
+/**
+ * For owner-only actions (e.g. deleting orders): like requireAdmin, but
+ * returns null for STAFF so the caller can answer with an error.
+ */
+export async function requireAdminRole() {
+  const admin = await requireAdmin()
+  return isAdminRole(admin) ? admin : null
+}

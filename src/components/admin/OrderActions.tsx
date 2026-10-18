@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { markOrderPaidAction, updateOrderStatusAction } from '@/lib/actions/admin-orders'
 import { nowInStoreTzForInput } from '@/lib/dates'
+import { isStockReturnedStatus, statusChangeStockNote } from '@/lib/order-stock'
 import type { OrderStatus, PaymentStatus } from '@prisma/client'
 
 const STATUS_OPTIONS: OrderStatus[] = [
@@ -21,16 +22,22 @@ export function OrderActions({
   orderId,
   status,
   paymentStatus,
+  linkedUnits,
+  itemUnits,
 }: {
   orderId: string
   status: OrderStatus
   paymentStatus: PaymentStatus
+  /** Net units the order currently has deducted from stock. */
+  linkedUnits: number
+  itemUnits: number
 }) {
   const [selectedStatus, setSelectedStatus] = useState(status)
   const [occurredAt, setOccurredAt] = useState(() => nowInStoreTzForInput())
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const stockNote = statusChangeStockNote({ from: status, to: selectedStatus, paymentStatus, linkedUnits, itemUnits })
 
   function handleStatusSave() {
     setError(null)
@@ -85,6 +92,7 @@ export function OrderActions({
             className={inputClass}
           />
         </label>
+        {stockNote && <p className="text-sm text-amber-700 dark:text-amber-400">{stockNote}</p>}
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex items-center gap-3">
           <button
@@ -99,6 +107,12 @@ export function OrderActions({
         </div>
       </div>
 
+      {paymentStatus !== 'PAID' && isStockReturnedStatus(status) && (
+        <p className="text-xs opacity-70">
+          This order is {status.toLowerCase()}. Marking it paid records the payment only; stock is deducted if you
+          move it back to an active status.
+        </p>
+      )}
       {paymentStatus !== 'PAID' && (
         <button
           type="button"

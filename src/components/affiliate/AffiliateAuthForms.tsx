@@ -43,29 +43,51 @@ export function AffiliateLoginForm() {
   )
 }
 
-export function AffiliateSignupForm() {
+export function AffiliateSignupForm({
+  invite,
+}: {
+  invite?: { token: string; name: string; email: string; phone: string }
+}) {
   const [state, formAction, isPending] = useActionState(affiliateSignupAction, undefined)
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <FormError message={state?.error} />
+      {invite && <input type="hidden" name="invite" value={invite.token} />}
       <div>
         <label htmlFor="name" className={labelClass}>
           Full name
         </label>
-        <input id="name" name="name" required autoComplete="name" className={inputClass} />
+        <input id="name" name="name" required autoComplete="name" defaultValue={invite?.name} className={inputClass} />
       </div>
       <div>
         <label htmlFor="email" className={labelClass}>
           Email
         </label>
-        <input id="email" name="email" type="email" required autoComplete="email" className={inputClass} />
+        <input
+          id="email"
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          defaultValue={invite?.email}
+          readOnly={Boolean(invite)}
+          className={`${inputClass} read-only:opacity-60`}
+        />
       </div>
       <div>
         <label htmlFor="phone" className={labelClass}>
           Phone
         </label>
-        <input id="phone" name="phone" type="tel" required autoComplete="tel" className={inputClass} />
+        <input
+          id="phone"
+          name="phone"
+          type="tel"
+          required
+          autoComplete="tel"
+          defaultValue={invite?.phone}
+          className={inputClass}
+        />
       </div>
       <div>
         <label htmlFor="password" className={labelClass}>
@@ -74,7 +96,7 @@ export function AffiliateSignupForm() {
         <PasswordInput id="password" name="password" required autoComplete="new-password" placeholder="At least 8 characters" />
       </div>
       <button type="submit" disabled={isPending} className={buttonClass}>
-        {isPending ? 'Creating account…' : 'Create Account'}
+        {isPending ? 'Creating account…' : invite ? 'Activate Account' : 'Create Account'}
       </button>
     </form>
   )

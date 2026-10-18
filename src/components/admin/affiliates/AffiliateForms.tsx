@@ -9,13 +9,20 @@ import {
 } from '@/lib/actions/admin-affiliates'
 import { todayInStoreTz } from '@/lib/dates'
 import { CommissionFields, affiliateInputClass, affiliateLabelClass } from '@/components/admin/affiliates/CommissionFields'
+import { InviteDeliveryNotice } from '@/components/admin/affiliates/AffiliateInvite'
 
 const buttonClass =
   'rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
 
-function FormMessage({ state, successText }: { state: { error?: string; success?: boolean } | undefined; successText: string }) {
+function FormMessage({
+  state,
+  successText,
+}: {
+  state: { error?: string; success?: boolean; notice?: string } | undefined
+  successText: string
+}) {
   if (state?.error) return <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>
-  if (state?.success) return <p className="text-sm text-emerald-700 dark:text-emerald-400">{successText}</p>
+  if (state?.success) return <p className="text-sm text-emerald-700 dark:text-emerald-400">{state.notice ?? successText}</p>
   return null
 }
 
@@ -36,7 +43,7 @@ export function InviteAffiliateForm() {
       <div>
         <p className="font-medium">Recruit an affiliate</p>
         <p className="text-sm opacity-60">
-          They&apos;re active straight away. Ask them to sign up at /affiliate/signup with this email to set a password.
+          They&apos;re active straight away. We email them a single-use link (valid 7 days) to set their password, and show it here for you to send yourself too.
         </p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -58,8 +65,13 @@ export function InviteAffiliateForm() {
         <button type="submit" disabled={isPending} className={buttonClass}>
           {isPending ? 'Saving…' : 'Invite affiliate'}
         </button>
-        <FormMessage state={state} successText="Affiliate invited." />
+        {state?.error && <FormMessage state={state} successText="" />}
       </div>
+      {state?.success && state.inviteUrl && (
+        <InviteDeliveryNotice
+          delivery={{ inviteUrl: state.inviteUrl, emailSent: state.emailSent ?? false, notice: state.notice }}
+        />
+      )}
     </form>
   )
 }

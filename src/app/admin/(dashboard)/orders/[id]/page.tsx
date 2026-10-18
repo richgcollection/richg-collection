@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { OrderActions } from '@/components/admin/OrderActions'
 import { OrderAffiliatePanel } from '@/components/admin/OrderAffiliatePanel'
 import { OrderDeleteButton } from '@/components/admin/OrderDeleteButton'
+import { getCurrentAdmin, isAdminRole } from '@/lib/auth/dal'
+import { netDeductedUnits } from '@/lib/order-stock'
 import { prisma } from '@/lib/prisma'
 import { formatKes } from '@/lib/money'
 import { formatStoreDateTime } from '@/lib/dates'
@@ -33,6 +35,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     },
   })
   if (!order) notFound()
+  const canDelete = isAdminRole(await getCurrentAdmin())
 
   const shippingAddress = order.shippingAddress as unknown as ShippingAddressInput
 
@@ -107,6 +110,8 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             orderId={order.id}
             status={order.status}
             paymentStatus={order.paymentStatus}
+            linkedUnits={netDeductedUnits(order.stockMovements)}
+            itemUnits={order.items.reduce((sum, item) => sum + item.quantity, 0)}
           />
 
           <OrderAffiliatePanel orderId={order.id} />
@@ -130,13 +135,16 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             </ol>
           </div>
 
-          <OrderDeleteButton
-            orderId={order.id}
-            orderNumber={order.orderNumber}
-            items={order.items}
-            movements={order.stockMovements}
-            redirectToList
-          />
+          {canDelete && (
+            <OrderDeleteButton
+              orderId={order.id}
+              orderNumber={order.orderNumber}
+              status={order.status}
+              items={order.items}
+              movements={order.stockMovements}
+              redirectToList
+            />
+          )}
         </div>
       </div>
     </div>

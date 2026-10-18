@@ -2,15 +2,32 @@
 
 import { useState, useTransition } from 'react'
 import { updateOrderStatusAction } from '@/lib/actions/admin-orders'
-import type { OrderStatus } from '@prisma/client'
+import { statusChangeStockNote } from '@/lib/order-stock'
+import type { OrderStatus, PaymentStatus } from '@prisma/client'
 
 const STATUS_OPTIONS: OrderStatus[] = ['PENDING', 'PROCESSING', 'SHIPPED', 'COMPLETED', 'CANCELLED', 'REFUNDED', 'FAILED']
 
-export function OrderStatusSelect({ orderId, status }: { orderId: string; status: OrderStatus }) {
+export function OrderStatusSelect({
+  orderId,
+  status,
+  paymentStatus,
+  linkedUnits,
+  itemUnits,
+}: {
+  orderId: string
+  status: OrderStatus
+  paymentStatus: PaymentStatus
+  /** Net units the order currently has deducted from stock. */
+  linkedUnits: number
+  itemUnits: number
+}) {
   const [value, setValue] = useState(status)
   const [isPending, startTransition] = useTransition()
 
   function handleChange(newStatus: OrderStatus) {
+    const note = statusChangeStockNote({ from: value, to: newStatus, paymentStatus, linkedUnits, itemUnits })
+    if (note && !window.confirm(`Set order to ${newStatus}? ${note}`)) return
+
     setValue(newStatus)
     const formData = new FormData()
     formData.set('orderId', orderId)

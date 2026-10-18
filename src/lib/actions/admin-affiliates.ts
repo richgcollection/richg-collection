@@ -8,9 +8,12 @@ import { prisma } from '@/lib/prisma'
 import { effectiveCommissionWhere, generateReferralCode, syncAffiliateCommissions } from '@/lib/affiliates'
 import { isMonthKey, percentToBps } from '@/lib/affiliate-terms'
 import { parseStoreDate } from '@/lib/dates'
+import { createInviteToken, describeDelivery, inviteUrl, sendAffiliateApprovedEmail, sendAffiliateInviteEmail } from '@/lib/affiliate-invites'
+import type { InviteDelivery } from '@/lib/affiliate-invites'
 import type { ActionResult } from '@/lib/actions/cart'
 
-export type AffiliateFormState = { error?: string; success?: boolean } | undefined
+export type AffiliateFormState = { error?: string; success?: boolean; notice?: string } | undefined
+export type InviteFormState = ({ error?: string; success?: boolean } & Partial<InviteDelivery>) | undefined
 
 const emailSchema = z.string().trim().toLowerCase().pipe(z.email('Enter a valid email address.'))
 const commissionTypeSchema = z.enum(['FIXED', 'PERCENT'])
@@ -40,11 +43,11 @@ const inviteSchema = z.object({
   commissionValue: z.string().trim().min(1, 'Enter a commission value.'),
 })
 
-/** Recruits an affiliate: ACTIVE straight away, password set when they sign up with this email. */
+/** Recruits an affiliate: ACTIVE straight away, password set through the single-use link emailed to them. */
 export async function inviteAffiliateAction(
-  _prevState: AffiliateFormState,
+  _prevState: InviteFormState,
   formData: FormData,
-): Promise<AffiliateFormState> {
+): Promise<InviteFormState> {
   await requireAdmin()
   const parsed = inviteSchema.safeParse({
     name: formData.get('name'),
@@ -59,6 +62,8 @@ export async function inviteAffiliateAction(
   const commissionValue = parseCommissionValue(commissionType, parsed.data.commissionValue)
   if (commissionValue === null) return { error: 'Enter a valid commission value.' }
 
+  const now = new Date()
+  const { token, data: inviteData } = createInviteToken(now)
   try {
     await prisma.affiliate.create({
       data: {
@@ -66,7 +71,8 @@ export async function inviteAffiliateAction(
         email,
         phone: phone || null,
         status: 'ACTIVE',
-        invitedAt: new Date(),
+        invitedAt: now,
+        ...inviteData,
         commissionType,
         commissionValue,
         referralCode: await generateReferralCode(name),
@@ -77,8 +83,32 @@ export async function inviteAffiliateAction(
     throw error
   }
 
+  const url = inviteUrl(token)
+  const sent = await sendAffiliateInviteEmail({ name, email, url })
   revalidateAffiliate()
-  return { success: true }
+  return { success: true, ...describeDelivery(url, sent) }
+}
+
+export type ResendInviteResult = ({ success: true } & InviteDelivery) | { success: false; error: string }
+
+/** Issues a new invite link (the old one stops working) and emails it again. */
+export async function resendAffiliateInviteAction(affiliateId: string): Promise<ResendInviteResult> {
+  await requireAdmin()
+  const parsed = z.string().min(1).safeParse(affiliateId)
+  if (!parsed.success) return { success: false, error: 'Invalid affiliate.' }
+
+  const { token, data } = createInviteToken()
+  const { count } = await prisma.affiliate.updateMany({
+    where: { id: parsed.data, passwordHash: null },
+    data,
+  })
+  if (count === 0) return { success: false, error: 'This affiliate has already set a password.' }
+
+  const affiliate = await prisma.affiliate.findUniqueOrThrow({ where: { id: parsed.data }, select: { name: true, email: true } })
+  const url = inviteUrl(token)
+  const sent = await sendAffiliateInviteEmail({ name: affiliate.name, email: affiliate.email, url })
+  revalidateAffiliate(parsed.data)
+  return { success: true, ...describeDelivery(url, sent) }
 }
 
 const updateSchema = z.object({
@@ -117,9 +147,17 @@ export async function updateAffiliateAction(
   const commissionValue = parseCommissionValue(commissionType, parsed.data.commissionValue)
   if (commissionValue === null) return { error: 'Enter a valid commission value.' }
 
+  const before = await prisma.affiliate.findUnique({
+    where: { id: affiliateId },
+    select: { status: true, passwordHash: true },
+  })
+  if (!before) return { error: 'Affiliate not found.' }
+
+  let updated: { name: string; email: string }
   try {
-    await prisma.affiliate.update({
+    updated = await prisma.affiliate.update({
       where: { id: affiliateId },
+      select: { name: true, email: true },
       data: {
         name: rest.name,
         email: rest.email,
@@ -136,6 +174,19 @@ export async function updateAffiliateAction(
   }
 
   revalidateAffiliate(affiliateId)
+
+  // An approved application gets a heads-up; email trouble never blocks the save.
+  if (before.status === 'PENDING' && rest.status === 'ACTIVE' && before.passwordHash) {
+    const sent = await sendAffiliateApprovedEmail(updated)
+    if (sent.ok) return { success: true, notice: `Approved. We emailed ${updated.email} to let them know.` }
+    return {
+      success: true,
+      notice:
+        sent.reason === 'not_configured'
+          ? 'Approved. Email isn’t configured, so let them know yourself.'
+          : 'Approved, but the approval email could not be sent. Let them know yourself.',
+    }
+  }
   return { success: true }
 }
 

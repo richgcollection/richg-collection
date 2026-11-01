@@ -36,7 +36,7 @@ export function ShopFilters({
   }
 
   return (
-    <div className="flex flex-col gap-6 text-sm">
+    <div className="order-last flex flex-col gap-6 text-sm md:order-none">
       <div>
         <p className="mb-2 font-medium tracking-wide uppercase opacity-70">Category</p>
         <div className="flex flex-wrap gap-2">

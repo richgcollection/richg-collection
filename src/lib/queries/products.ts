@@ -143,7 +143,13 @@ export async function getProducts(params: ProductListParams = {}): Promise<Produ
  * Display order for subcategory sections on a parent category page (top to
  * bottom). Subcategories not listed here follow, alphabetically.
  */
-const SUBCATEGORY_DISPLAY_ORDER = ['round-neck-tshirts', 'oversized-tshirts', 'long-sleeve-tshirts']
+const SUBCATEGORY_DISPLAY_ORDER = [
+  'round-neck-tshirts',
+  'oversized-tshirts',
+  'long-sleeve-tshirts',
+  'gym-vests',
+  'gym-shorts',
+]
 
 function subcategoryRank(slug: string): number {
   const index = SUBCATEGORY_DISPLAY_ORDER.indexOf(slug)

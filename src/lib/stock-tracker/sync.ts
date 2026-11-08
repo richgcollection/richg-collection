@@ -439,7 +439,7 @@ export async function planSync(sheets: SheetData) {
   const leftovers = [...pool.values()].flat()
   const pending = leftovers.filter(isPending)
   const orphans = leftovers.filter((e) => !isPending(e))
-  const newOrphans = orphans.filter((e) => !e.note?.startsWith(REVIEW))
+  const newOrphans = orphans.filter((e) => !e.note?.includes(ORPHAN_MARK))
   const discountProblems = applyDiscounts(sheets[SHEET_NAMES.profit] ?? [], added.filter((m) => m.reason === 'MANUAL_SALE' && m.unitPriceKes))
 
   // Stock: current counts + the effect of every new/changed entry, versus the

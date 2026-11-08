@@ -359,7 +359,7 @@ function diffEntry(entry: Entry, m: SheetMove, { linked }: { linked: boolean }):
   if (dayKey(entry.createdAt) !== dayKey(m.createdAt)) { data.createdAt = m.createdAt; changes.push(`date -> ${fmtDate(m.createdAt)}`) }
   // Prices only follow edits to rows already linked by SITE ID: older entries
   // may store a discounted unit price the sheet doesn't show.
-  const discounted = (entry.discountKes ?? 0) > 0 || entry.note?.startsWith('Discount KES')
+  const discounted = (entry.discountKes ?? 0) > 0 || entry.note?.includes('Discount KES')
   if (linked && m.direction === 'OUT' && !discounted && !entry.orderId && m.unitPriceKes != null && entry.unitPriceKes !== m.unitPriceKes) {
     data.unitPriceKes = m.unitPriceKes
     changes.push(`price ${entry.unitPriceKes ?? '-'} -> ${m.unitPriceKes}`)

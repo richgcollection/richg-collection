@@ -33,7 +33,7 @@ export default async function AdminInventoryPage({
   const activeReason = reason && isStockMovementReason(reason) ? reason : undefined
   const needsReview = review === '1'
 
-  const [summary, profit, movements, products, reviewCount, customers] = await Promise.all([
+  const [summary, profit, movements, products, reviewCount, customers, lastSync, pendingForSheet] = await Promise.all([
     getStockSummary(),
     getProfitSummary(),
     listStockMovements({ reason: activeReason, needsReview }),
@@ -56,6 +56,10 @@ export default async function AdminInventoryPage({
     prisma.customer.findMany({
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       select: { id: true, firstName: true, lastName: true, phone: true },
+    }),
+    prisma.sheetSyncRun.findFirst({ orderBy: { createdAt: 'desc' } }),
+    prisma.stockMovement.count({
+      where: { sheetExportedAt: null, reason: { not: 'ADJUSTMENT' }, OR: [{ orderId: { not: null } }, { createdById: { not: null } }] },
     }),
   ])
 
@@ -81,6 +85,7 @@ export default async function AdminInventoryPage({
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
+      <SheetSyncStatus run={lastSync} pendingForSheet={pendingForSheet} />
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Revenue (All Time)" value={formatKes(profit.revenueKes)} />
@@ -226,6 +231,45 @@ function StatCard({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-black/10 bg-surface p-5 dark:border-white/10">
       <p className="text-xs font-medium tracking-wide uppercase opacity-60">{label}</p>
       <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
+  )
+}
+
+const SYNC_TONE: Record<string, string> = {
+  APPLIED: 'bg-green-600',
+  NO_CHANGES: 'bg-green-600',
+  HELD: 'bg-amber-500',
+  FAILED: 'bg-red-600',
+}
+
+function SheetSyncStatus({
+  run,
+  pendingForSheet,
+}: {
+  run: { status: string; message: string; createdAt: Date } | null
+  pendingForSheet: number
+}) {
+  const when = run?.createdAt.toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Africa/Nairobi',
+  })
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+      <span className="flex items-center gap-2">
+        <span className={`inline-block size-2 rounded-full ${run ? (SYNC_TONE[run.status] ?? 'bg-gray-400') : 'bg-gray-400'}`} />
+        <span className="font-medium">Google Sheet sync</span>
+      </span>
+      <span className="opacity-70">
+        {run ? `${when}: ${run.status === 'HELD' ? 'On hold. ' : run.status === 'FAILED' ? 'Failed. ' : ''}${run.message}` : 'Not connected yet.'}
+      </span>
+      {pendingForSheet > 0 && (
+        <span className="opacity-70">
+          · {pendingForSheet} site {pendingForSheet === 1 ? 'entry' : 'entries'} waiting to be added to the sheet
+        </span>
+      )}
     </div>
   )
 }

@@ -317,31 +317,49 @@ model OrderItem {
 }
 
 model StockMovement {
-  id           String              @id @default(cuid())
-  productId    String
-  product      Product             @relation(fields: [productId], references: [id])
-  variantId    String?
-  variant      ProductVariant?     @relation(fields: [variantId], references: [id])
-  direction    StockDirection
-  reason       StockMovementReason
-  quantity     Int
-  unitCostKes  Int?
-  unitPriceKes Int?
+  id              String              @id @default(cuid())
+  productId       String
+  product         Product             @relation(fields: [productId], references: [id])
+  variantId       String?
+  variant         ProductVariant?     @relation(fields: [variantId], references: [id])
+  direction       StockDirection
+  reason          StockMovementReason
+  quantity        Int
+  unitCostKes     Int?
+  unitPriceKes    Int?
   /// Total discount on this line in KES (not per unit). Revenue = unitPriceKes × quantity − discountKes.
-  discountKes  Int?
-  supplier     String?
-  counterparty String?
-  note         String?             @db.Text
-  orderId      String?
-  order        Order?              @relation(fields: [orderId], references: [id])
-  createdById  String?
-  createdBy    User?               @relation(fields: [createdById], references: [id])
-  createdAt    DateTime            @default(now())
+  discountKes     Int?
+  supplier        String?
+  counterparty    String?
+  note            String?             @db.Text
+  orderId         String?
+  order           Order?              @relation(fields: [orderId], references: [id])
+  createdById     String?
+  createdBy       User?               @relation(fields: [createdById], references: [id])
+  createdAt       DateTime            @default(now())
+  /// When this entry was written to the Google Sheet stock tracker. Null on a
+  /// site-made entry (online order or admin stock in/out) means it is still
+  /// waiting to be added to the sheet.
+  sheetExportedAt DateTime?
 
   @@index([productId])
   @@index([variantId])
   @@index([direction])
   @@index([reason])
+  @@index([createdAt])
+}
+
+/// One run of the Google Sheet ⇄ site stock sync.
+model SheetSyncRun {
+  id        String   @id @default(cuid())
+  /// APPLIED, NO_CHANGES, HELD (guard tripped, nothing written) or FAILED.
+  status    String
+  /// "apps-script" or "cli".
+  source    String
+  message   String   @db.Text
+  summary   Json?
+  createdAt DateTime @default(now())
+
   @@index([createdAt])
 }
 

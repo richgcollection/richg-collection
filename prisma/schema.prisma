@@ -256,6 +256,8 @@ model Order {
   customer             Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
   guestEmail           String?
   guestPhone           String?
+  /// Where the order was placed: WEBSITE or WHATSAPP.
+  channel              String                @default("WEBSITE")
   status               OrderStatus           @default(PENDING)
   paymentStatus        PaymentStatus         @default(PENDING)
   paymentRef           String?               @unique
@@ -278,6 +280,7 @@ model Order {
   @@index([customerId])
   @@index([status])
   @@index([affiliateId])
+  @@index([status, paymentStatus, createdAt])
 }
 
 /// One row per fulfillment status change. `occurredAt` is set by the admin (e.g. the actual delivery date); `createdAt` is when it was recorded.
@@ -508,4 +511,31 @@ model LoginAttempt {
   @@index([scope, ipHash, createdAt])
   @@index([scope, emailHash, ipHash, createdAt])
   @@index([createdAt])
+}
+
+/// Conversation state for the WhatsApp sales bot, one row per customer phone (2547XXXXXXXX).
+/// `state` holds the current step, the bot cart and checkout details; the bot owns its shape.
+model BotSession {
+  phone     String   @id
+  name      String?
+  state     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// Admin AI assistant configuration. Single row, id "default". Edited from /admin/assistant/settings.
+/// `apiKeyEnc` is AES-256-GCM encrypted with a key derived from AUTH_SECRET (see src/lib/assistant/crypto.ts).
+model AssistantSettings {
+  id                 String   @id @default("default")
+  enabled            Boolean  @default(false)
+  /// One of the PROVIDERS keys in src/lib/assistant/providers.ts (anthropic, openai, gemini, ...).
+  provider           String   @default("anthropic")
+  model              String   @default("claude-opus-5-5")
+  apiKeyEnc          String?
+  /// Only used by the "custom" (OpenAI-compatible) provider.
+  baseUrl            String?
+  /// Let the assistant propose changes (restocks, stock-outs, order status) for an admin to confirm.
+  allowActions       Boolean  @default(true)
+  /// Extra business context added to the assistant's instructions.
+  customInstructions String?  @db.Text
+  updatedAt          DateTime @updatedAt
 }

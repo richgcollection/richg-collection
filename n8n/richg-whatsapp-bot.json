@@ -1,0 +1,474 @@
+{
+  "name": "Rich G – WhatsApp Sales Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "richg-whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e0271a30-9f67-4512-b10f-b16872d075b6",
+      "name": "Meta verify (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7d47a02e-6c42-4072-9ee1-42557c10099f"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "10321227-169a-422b-8083-dfecc3dd400f",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "REPLACE_WITH_YOUR_VERIFY_TOKEN",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b05b916a-94e8-4837-b18d-7277145ad183",
+      "name": "Verify token OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "id": "cc45b704-476a-4973-a6e6-ce70403af97e",
+      "name": "Return challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Forbidden",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "feb96633-b89c-434f-951f-40f14a9a9e20",
+      "name": "Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "richg-whatsapp",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "c71366a7-bdfd-4908-9363-2730cc671308",
+      "name": "WhatsApp inbound (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "webhookId": "aac0fdd2-4b5b-4d2d-8a58-539997330e82"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns Meta's webhook payload into one item per customer message.\n// Delivery/read receipts (value.statuses) are ignored.\nconst out = [];\nfor (const item of $input.all()) {\n  const body = item.json.body ?? item.json;\n  for (const entry of body.entry ?? []) {\n    for (const change of entry.changes ?? []) {\n      const value = change.value ?? {};\n      const phoneNumberId = value.metadata?.phone_number_id;\n      const names = Object.fromEntries((value.contacts ?? []).map(c => [c.wa_id, c.profile?.name]));\n      for (const m of value.messages ?? []) {\n        let text = null, replyId = null;\n        if (m.type === 'text') text = m.text?.body ?? null;\n        else if (m.type === 'interactive') {\n          const r = m.interactive?.button_reply ?? m.interactive?.list_reply;\n          replyId = r?.id ?? null; text = r?.title ?? null;\n        } else if (m.type === 'button') { replyId = m.button?.payload ?? null; text = m.button?.text ?? null; }\n        out.push({ json: { from: m.from, profileName: names[m.from] ?? null, text, replyId, messageId: m.id, phoneNumberId } });\n      }\n    }\n  }\n}\nreturn out;"
+      },
+      "id": "04206485-1062-4ff9-a9dc-63e44d63b6aa",
+      "name": "Parse messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v24.0/{{ $json.phoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $json.messageId }) }}",
+        "options": {}
+      },
+      "id": "a3e04dc8-8522-46ce-a369-cf8b06de9b6b",
+      "name": "Mark as read",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        180
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "WhatsApp Cloud API token"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://richgcollection.com/api/bot/message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: $json.from, profileName: $json.profileName, text: $json.text, replyId: $json.replyId }) }}",
+        "options": {
+          "timeout": 25000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 0
+            }
+          }
+        }
+      },
+      "id": "f66672df-4f55-46a7-a164-f4ab25bc11fb",
+      "name": "Ask website bot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "RichG Bot API key"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per WhatsApp message, in order, ready for \"Send WhatsApp\".\nconst out = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const reply = items[i].json;\n  const inbound = $('Parse messages').itemMatching(i).json;\n  for (const message of reply.messages ?? []) {\n    out.push({ json: { phoneNumberId: inbound.phoneNumberId, to: reply.to ?? inbound.from, message } });\n  }\n}\nreturn out;"
+      },
+      "id": "a9b10750-8c47-4e54-aee5-be6308aa5a33",
+      "name": "Split messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v24.0/{{ $json.phoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.to, ...$json.message }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 350
+            }
+          }
+        }
+      },
+      "id": "865a1b53-65a7-490d-96f0-ca861daeb63d",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "WhatsApp Cloud API token"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "e1a16819-784a-4b96-bb0a-6b354d9054b4",
+              "leftValue": "={{ $json.handover }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3a567e47-6e7e-4199-8283-57eef05f82d1",
+      "name": "Asked for a person?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        700,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v24.0/{{ $('Parse messages').item.json.phoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: 'REPLACE_WITH_STAFF_NUMBER_2547XXXXXXXX', type: 'text', text: { body: 'Customer wants a person: +' + $json.to + ' (' + ($('Parse messages').item.json.profileName || 'no name') + '). The bot is paused for them for 2 hours.' } }) }}",
+        "options": {}
+      },
+      "id": "f60b205c-a63a-4f39-9824-0e009192f9dd",
+      "name": "Alert staff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        520
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "WhatsApp Cloud API token"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "richg-order-paid",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "61cdd652-e6b1-4d6d-8da9-d14a4e65d66c",
+      "name": "Order paid (from website)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        760
+      ],
+      "webhookId": "5fe7e48e-a507-4c31-8d30-8f0c1e37f083",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "RichG Bot API key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Messages posted by the website when a WhatsApp order is paid.\n// Set your WhatsApp phone number ID here (Meta > WhatsApp > API Setup).\nconst PHONE_NUMBER_ID = 'REPLACE_WITH_PHONE_NUMBER_ID';\nconst body = $input.first().json.body ?? {};\nreturn (body.messages ?? []).map(message => ({ json: { phoneNumberId: PHONE_NUMBER_ID, to: body.to, message } }));"
+      },
+      "id": "1b0d7469-5bc9-49af-8bd7-44584ea6e441",
+      "name": "Paid messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Rich G WhatsApp sales bot\n\n**Before activating, replace:**\n1. `REPLACE_WITH_YOUR_VERIFY_TOKEN` in *Verify token OK?*: any string, also entered in Meta's webhook settings.\n2. `REPLACE_WITH_PHONE_NUMBER_ID` in *Paid messages*.\n3. `REPLACE_WITH_STAFF_NUMBER…` in *Alert staff*.\n4. If the site isn't on richgcollection.com, change the URL in *Ask website bot*.\n\n**Credentials (Header Auth):**\n- *WhatsApp Cloud API token*: Name `Authorization`, Value `Bearer <permanent system-user token>`\n- *RichG Bot API key*: Name `Authorization`, Value `Bearer <BOT_API_KEY from the site's env>`\n\nMeta callback URL = Production URL of *WhatsApp inbound*, e.g. `https://n8n.yourdomain.com/webhook/richg-whatsapp`. Subscribe the **messages** field.",
+        "height": 560,
+        "width": 380
+      },
+      "id": "6c9755d0-a32b-452f-8afe-564b55f33e5d",
+      "name": "Note: Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "All shopping logic (catalog, stock reservations, cart, checkout, Paystack link) runs on the website at `/api/bot/message`. n8n receives WhatsApp messages, forwards them, and sends back the replies in order.\n\nPayment is confirmed by the website's existing Paystack webhook. The site then posts to *Order paid* and n8n sends the confirmation.",
+        "height": 220,
+        "width": 520
+      },
+      "id": "33a392fa-6f98-4734-ae4e-c9d67c27a648",
+      "name": "Note: Flow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        600,
+        -140
+      ]
+    }
+  ],
+  "connections": {
+    "Meta verify (GET)": {
+      "main": [
+        [
+          {
+            "node": "Verify token OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify token OK?": {
+      "main": [
+        [
+          {
+            "node": "Return challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp inbound (POST)": {
+      "main": [
+        [
+          {
+            "node": "Parse messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse messages": {
+      "main": [
+        [
+          {
+            "node": "Mark as read",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ask website bot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask website bot": {
+      "main": [
+        [
+          {
+            "node": "Split messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Asked for a person?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split messages": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asked for a person?": {
+      "main": [
+        [
+          {
+            "node": "Alert staff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order paid (from website)": {
+      "main": [
+        [
+          {
+            "node": "Paid messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paid messages": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

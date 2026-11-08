@@ -4,6 +4,7 @@ import { syncAffiliateCommissions } from '@/lib/affiliates'
 import type { Cart } from '@/lib/cart'
 import { upsertCustomerFromOrder } from '@/lib/customers'
 import { applyOrderStockOut } from '@/lib/inventory'
+import { notifyWhatsAppOrderPaid } from '@/lib/bot/notify'
 import { sendMetaPurchaseEvent } from '@/lib/meta-capi'
 import { isStockReturnedStatus } from '@/lib/order-stock'
 
@@ -105,6 +106,7 @@ export async function markOrderPaid(orderId: string, createdById?: string): Prom
 
   if (outcome === 'paid') {
     after(() => sendMetaPurchaseEvent(orderId))
+    after(() => notifyWhatsAppOrderPaid(orderId))
   }
   return outcome !== 'already-paid'
 }

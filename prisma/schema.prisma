@@ -375,33 +375,6 @@ model ContactMessage {
   createdAt DateTime @default(now())
 }
 
-/// A participant in the RICHG 60-second push-up challenge (single ongoing competition).
-/// Registered by name first; score is entered after their round.
-model PushupEntry {
-  id        String    @id @default(cuid())
-  name      String
-  score     Int?
-  /// When the score was first entered. Breaks ties: earlier score ranks higher.
-  scoredAt  DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@index([score])
-}
-
-/// Live state of the push-up challenge shown on the admin and public pages. Single row, id "default".
-model PushupChallengeState {
-  id                   String    @id @default("default")
-  /// When the "about to begin" countdown started; the 60s round follows it. Null = timer idle.
-  timerStartedAt       DateTime?
-  /// Set while paused: how far into countdown + round the timer had got.
-  timerPausedElapsedMs Int?
-  winnerName           String?
-  winnerScore          Int?
-  winnerAnnouncedAt    DateTime?
-  updatedAt            DateTime  @updatedAt
-}
-
 /// A referral partner. Kept separate from User so an affiliate login can never carry admin access.
 /// An admin-invited affiliate starts ACTIVE with no password; signing up with that email claims it.
 model Affiliate {

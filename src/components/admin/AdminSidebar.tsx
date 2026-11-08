@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { href: '/admin/orders', label: 'Orders' },
   { href: '/admin/customers', label: 'Customers' },
   { href: '/admin/affiliates', label: 'Affiliates' },
-  { href: '/admin/pushup-challenge', label: 'Push-Up Challenge' },
   { href: '/admin/shipping-rates', label: 'Shipping Rates' },
   { href: '/admin/payment-settings', label: 'Payment Settings' },
 ]

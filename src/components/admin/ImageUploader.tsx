@@ -2,9 +2,22 @@
 
 import Image from 'next/image'
 import { useRef, useState } from 'react'
-import { uploadProductImageAction } from '@/lib/actions/upload'
+import { upload } from '@vercel/blob/client'
+import { MAX_IMAGE_SIZE_BYTES, MAX_IMAGE_SIZE_MB } from '@/lib/upload-limits'
 
 const MAX_IMAGES = 5
+
+function validateFile(file: File): string | null {
+  if (!file.type.startsWith('image/')) return `${file.name} is not an image file.`
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    return `${file.name} is too large. Please use a file under ${MAX_IMAGE_SIZE_MB}MB.`
+  }
+  return null
+}
+
+function safeFileName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, '-').slice(-100) || 'image'
+}
 
 export function ImageUploader({
   urls,
@@ -43,13 +56,21 @@ export function ImageUploader({
 
     try {
       for (const [index, file] of toUpload.entries()) {
-        const formData = new FormData()
-        formData.set('file', file)
-        const result = await uploadProductImageAction(formData)
-        if (result.success) {
-          uploaded.push(result.url)
+        const problem = validateFile(file)
+        if (problem) {
+          setError(problem)
         } else {
-          setError(result.error)
+          try {
+            const blob = await upload(`products/${safeFileName(file.name)}`, file, {
+              access: 'public',
+              handleUploadUrl: '/api/admin/blob-upload',
+              contentType: file.type,
+              multipart: file.size > 5 * 1024 * 1024,
+            })
+            uploaded.push(blob.url)
+          } catch (err) {
+            setError(`Upload failed for ${file.name}: ${err instanceof Error ? err.message : 'unknown error'}`)
+          }
         }
         setProgress({ completed: index + 1, total: toUpload.length })
       }
@@ -185,7 +206,7 @@ export function ImageUploader({
             </div>
           ) : (
             <p className="mt-1 text-xs opacity-50">
-              JPG, PNG, or WebP, up to 4MB each · up to {MAX_IMAGES} images · drag thumbnails to reorder, first is the featured image
+              JPG, PNG, or WebP, up to {MAX_IMAGE_SIZE_MB}MB each · up to {MAX_IMAGES} images · drag thumbnails to reorder, first is the featured image
             </p>
           )}
           <input

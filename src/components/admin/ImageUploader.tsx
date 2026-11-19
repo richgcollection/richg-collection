@@ -18,6 +18,8 @@ export function ImageUploader({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const atLimit = urls.length >= MAX_IMAGES
 
@@ -71,17 +73,70 @@ export function ImageUploader({
     onChange(urls.filter((_, i) => i !== index))
   }
 
+  // Reorders images; whatever lands at index 0 becomes the featured image.
+  function moveImage(from: number, to: number) {
+    if (from === to || from < 0 || to < 0 || from >= urls.length || to >= urls.length) return
+    const next = [...urls]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    setSuccess(null)
+    onChange(next)
+  }
+
+  function endDrag() {
+    setDragIndex(null)
+    setOverIndex(null)
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {urls.length > 0 && (
         <div className="flex flex-wrap gap-3">
           {urls.map((url, index) => (
-            <div key={url + index} className="relative h-24 w-20 overflow-hidden rounded-md border border-black/10 dark:border-white/10">
-              <Image src={url} alt="" fill className="object-cover" unoptimized />
-              {index === 0 && (
+            <div
+              key={url + index}
+              draggable
+              onDragStart={(e) => {
+                setDragIndex(index)
+                e.dataTransfer.effectAllowed = 'move'
+                e.dataTransfer.setData('text/plain', String(index))
+              }}
+              onDragOver={(e) => {
+                if (dragIndex === null) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                if (overIndex !== index) setOverIndex(index)
+              }}
+              onDrop={(e) => {
+                if (dragIndex === null) return
+                e.preventDefault()
+                moveImage(dragIndex, index)
+                endDrag()
+              }}
+              onDragEnd={endDrag}
+              title="Drag to reorder"
+              className={`group relative h-24 w-20 cursor-grab overflow-hidden rounded-md border transition active:cursor-grabbing ${
+                dragIndex === index ? 'opacity-40' : ''
+              } ${
+                overIndex === index && dragIndex !== index
+                  ? 'border-foreground ring-2 ring-foreground'
+                  : 'border-black/10 dark:border-white/10'
+              }`}
+            >
+              <Image src={url} alt="" fill draggable={false} className="pointer-events-none object-cover" unoptimized />
+              {index === 0 ? (
                 <span className="absolute bottom-0.5 left-0.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-white uppercase">
                   Featured
                 </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => moveImage(index, 0)}
+                  className="absolute bottom-0.5 left-0.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-white uppercase opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
+                  aria-label="Make featured image"
+                >
+                  ★ Feature
+                </button>
               )}
               <button
                 type="button"
@@ -130,7 +185,7 @@ export function ImageUploader({
             </div>
           ) : (
             <p className="mt-1 text-xs opacity-50">
-              JPG, PNG, or WebP, up to 4MB each · up to {MAX_IMAGES} images, first is the featured image
+              JPG, PNG, or WebP, up to 4MB each · up to {MAX_IMAGES} images · drag thumbnails to reorder, first is the featured image
             </p>
           )}
           <input

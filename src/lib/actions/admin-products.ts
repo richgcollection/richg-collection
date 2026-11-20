@@ -33,7 +33,8 @@ function parseProductForm(formData: FormData) {
     shortDescription: formData.get('shortDescription') || undefined,
     description: formData.get('description') || undefined,
     basePriceKes: formData.get('basePriceKes'),
-    salePriceKes: formData.get('salePriceKes') || undefined,
+    // A sale price of 0 would sell the product for free; treat it as "no sale price".
+    salePriceKes: Number(formData.get('salePriceKes')) > 0 ? formData.get('salePriceKes') : undefined,
     costPriceKes: formData.get('costPriceKes') || undefined,
     supplier: formData.get('supplier') || undefined,
     lowStockThreshold: formData.get('lowStockThreshold') || undefined,
@@ -194,7 +195,22 @@ export async function updateProductAction(productId: string, formData: FormData)
     return { success: false, error: 'That slug is already in use.' }
   }
 
-  await prisma.product.update({ where: { id: productId }, data: parsed.data })
+  // A blank optional field parses to undefined, which Prisma treats as "leave
+  // unchanged" — so clearing e.g. the sale price never took effect. Save blanks as null.
+  const d = parsed.data
+  await prisma.product.update({
+    where: { id: productId },
+    data: {
+      ...d,
+      sku: d.sku ?? null,
+      shortDescription: d.shortDescription ?? null,
+      description: d.description ?? null,
+      salePriceKes: d.salePriceKes ?? null,
+      costPriceKes: d.costPriceKes ?? null,
+      supplier: d.supplier ?? null,
+      lowStockThreshold: d.lowStockThreshold ?? null,
+    },
+  })
 
   const categoryIds = formData.getAll('categoryIds').map(String)
   await syncCategories(productId, categoryIds)

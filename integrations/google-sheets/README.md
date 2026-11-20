@@ -64,7 +64,7 @@ the deletion was intentional, run the sync once from the command line with
 
 ## Known limits
 
-- Products not on the website (currently Navy Blue Round Neck T-Shirt) are
+- Products not on the website (currently none) are
   skipped. Add the product on the site, then remove it from `SKIP_PRODUCTS` in
   `src/lib/stock-tracker/mapping.ts`.
 - If an online order is cancelled after it reached the sheet, delete its row in

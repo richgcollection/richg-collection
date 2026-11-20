@@ -65,7 +65,7 @@ export const SHEET_COLOR_BY_PRODUCT: Record<string, string> = {
 }
 
 /** Products in the sheet that aren't on the site yet: skipped and reported. */
-export const SKIP_PRODUCTS = new Set(['navy blue round neck t-shirt'])
+export const SKIP_PRODUCTS = new Set<string>()
 
 export const REASON_BY_SHEET_TYPE: Record<string, { reason: StockMovementReason; note?: string }> = {
   SALE: { reason: 'MANUAL_SALE' },

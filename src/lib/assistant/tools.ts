@@ -7,6 +7,7 @@ import { getStockSummary, listStockMovements, NON_SALE_OUT_REASONS } from '@/lib
 import { todayInStoreTz } from '@/lib/dates'
 import type { AssistantAction } from '@/lib/assistant/actions-schema'
 import { ACTION_SCHEMAS } from '@/lib/assistant/actions-schema'
+import { addMemory, deleteMemory, MAX_MEMORY_LENGTH, updateMemory } from '@/lib/assistant/memory'
 
 /**
  * Tools the assistant can call. Read tools query the store directly. Action
@@ -19,6 +20,8 @@ import { ACTION_SCHEMAS } from '@/lib/assistant/actions-schema'
 export type ToolContext = {
   /** Called by action tools to surface a confirmation card in the chat. */
   propose: (proposal: AssistantAction & { summary: string }) => void
+  /** Who is chatting, recorded on memory notes. */
+  adminName: string
 }
 
 type ToolDef<S extends z.ZodObject> = {
@@ -388,6 +391,38 @@ export const TOOLS = [
         note: m.note,
         by: m.createdBy?.name ?? m.createdBy?.email ?? null,
       }))
+    },
+  }),
+
+  // ---------------------------------------------------------------- memory (kept between conversations)
+
+  tool({
+    name: 'remember',
+    description: `Save a short note to your long-term memory so you know it in future conversations. Use it when the admin asks you to remember something, or states a lasting fact or preference (a supplier, a reorder rule, how they like reports, who a regular customer is). One fact per note, written so it makes sense on its own later, max ${MAX_MEMORY_LENGTH} characters. Do not save figures you can look up with tools, one-off requests, or passwords, API keys, M-Pesa PINs or other secrets. If a note on the same topic already exists, use update_memory instead.`,
+    schema: z.object({ content: z.string().describe('The note, e.g. "Owner wants weekly summaries in a table, KES rounded to the nearest 100."') }),
+    run: async (input, ctx) => {
+      const r = await addMemory(input.content, ctx.adminName)
+      return 'error' in r ? r : { saved: input.content, id: r.id }
+    },
+  }),
+
+  tool({
+    name: 'update_memory',
+    description: 'Replace the text of an existing memory note (id from your memory list) when a fact has changed or to merge notes.',
+    schema: z.object({ id: z.string(), content: z.string() }),
+    run: async (input) => {
+      const r = await updateMemory(input.id, input.content)
+      return 'error' in r ? r : { updated: input.id, content: input.content }
+    },
+  }),
+
+  tool({
+    name: 'forget',
+    description: 'Delete a memory note (id from your memory list) that is wrong, outdated, or that the admin asks you to forget.',
+    schema: z.object({ id: z.string() }),
+    run: async (input) => {
+      const r = await deleteMemory(input.id)
+      return 'error' in r ? r : { forgotten: input.id }
     },
   }),
 

@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { requireAdminRole } from '@/lib/auth/dal'
 import { getAssistantSettingsForAdmin } from '@/lib/assistant/settings'
 import { AssistantSettingsForm } from '@/components/admin/assistant/AssistantSettingsForm'
+import { AssistantMemoryPanel } from '@/components/admin/assistant/AssistantMemoryPanel'
+import { listMemories, MAX_MEMORIES, MAX_MEMORY_LENGTH } from '@/lib/assistant/memory'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +18,7 @@ export default async function AdminAssistantSettingsPage() {
     )
   }
 
-  const settings = await getAssistantSettingsForAdmin()
+  const [settings, memories] = await Promise.all([getAssistantSettingsForAdmin(), listMemories()])
 
   return (
     <div>
@@ -30,6 +32,13 @@ export default async function AdminAssistantSettingsPage() {
       </p>
       <div className="mt-6">
         <AssistantSettingsForm {...settings} />
+      </div>
+      <div className="mt-6">
+        <AssistantMemoryPanel
+          notes={memories.map((m) => ({ id: m.id, content: m.content, createdBy: m.createdBy, createdAt: m.createdAt.toISOString() }))}
+          max={MAX_MEMORIES}
+          maxLength={MAX_MEMORY_LENGTH}
+        />
       </div>
     </div>
   )

@@ -530,3 +530,16 @@ model AssistantSettings {
   customInstructions String?  @db.Text
   updatedAt          DateTime @updatedAt
 }
+
+/// Long-term notes the admin AI assistant keeps between conversations
+/// (preferences, suppliers, recurring context). Shared by all admins.
+model AssistantMemory {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  /// Name or email of the admin whose conversation created it.
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}

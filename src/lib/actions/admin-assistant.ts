@@ -10,6 +10,7 @@ import { todayInStoreTz } from '@/lib/dates'
 import { SETTINGS_ID } from '@/lib/assistant/settings'
 import { describeProviderError, testConnection } from '@/lib/assistant/engine'
 import { assistantActionSchema } from '@/lib/assistant/actions-schema'
+import { addMemory, deleteMemory } from '@/lib/assistant/memory'
 import { recordStockInAction, recordStockOutAction } from '@/lib/actions/admin-inventory'
 import { markOrderPaidAction, updateOrderStatusAction } from '@/lib/actions/admin-orders'
 import type { ActionResult } from '@/lib/actions/cart'
@@ -169,4 +170,26 @@ export async function confirmAssistantAction(raw: unknown): Promise<ActionResult
 async function findOrderId(orderNumber: string) {
   const order = await prisma.order.findUnique({ where: { orderNumber }, select: { id: true } })
   return order?.id ?? null
+}
+
+// ---------------------------------------------------------------- memory (owner only)
+
+export async function addAssistantMemoryAction(
+  _prev: ActionResult | undefined,
+  formData: FormData,
+): Promise<ActionResult> {
+  const owner = await requireAdminRole()
+  if (!owner) return { success: false, error: OWNER_ONLY }
+  const r = await addMemory(String(formData.get('content') ?? ''), owner.name || owner.email)
+  if ('error' in r) return { success: false, error: r.error }
+  revalidatePath('/admin/assistant/settings')
+  return { success: true }
+}
+
+export async function deleteAssistantMemoryAction(id: string): Promise<ActionResult> {
+  if (!(await requireAdminRole())) return { success: false, error: OWNER_ONLY }
+  const r = await deleteMemory(id)
+  if ('error' in r) return { success: false, error: r.error }
+  revalidatePath('/admin/assistant/settings')
+  return { success: true }
 }

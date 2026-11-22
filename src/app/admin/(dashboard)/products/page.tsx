@@ -6,8 +6,24 @@ import { formatKes } from '@/lib/money'
 
 export const dynamic = 'force-dynamic'
 
-export default async function AdminProductsPage() {
+export default async function AdminProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>
+}) {
+  const { q } = await searchParams
+  const query = q?.trim()
+
   const products = await prisma.product.findMany({
+    where: query
+      ? {
+          OR: [
+            { name: { contains: query, mode: 'insensitive' } },
+            { sku: { contains: query, mode: 'insensitive' } },
+            { slug: { contains: query, mode: 'insensitive' } },
+          ],
+        }
+      : undefined,
     orderBy: { createdAt: 'desc' },
     include: {
       variants: { select: { stockQty: true } },
@@ -26,6 +42,27 @@ export default async function AdminProductsPage() {
           New Product
         </Link>
       </div>
+
+      <form method="GET" className="mt-6 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          name="q"
+          defaultValue={query}
+          placeholder="Search by name or SKU…"
+          className="w-full max-w-sm rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+        />
+        <button
+          type="submit"
+          className="rounded-full border border-black/10 px-4 py-2 text-sm dark:border-white/10"
+        >
+          Search
+        </button>
+        {query && (
+          <Link href="/admin/products" className="px-2 py-2 text-sm opacity-60 hover:opacity-100">
+            Clear
+          </Link>
+        )}
+      </form>
 
       <table className="mt-6 w-full text-sm">
         <thead>
@@ -87,7 +124,7 @@ export default async function AdminProductsPage() {
           {products.length === 0 && (
             <tr>
               <td colSpan={6} className="py-8 text-center opacity-60">
-                No products yet.
+                {query ? `No products match “${query}”.` : 'No products yet.'}
               </td>
             </tr>
           )}

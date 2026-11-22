@@ -78,13 +78,29 @@ export async function getFeaturedProducts(limit = 4): Promise<ProductListItem[]>
   return products.map(toListItem)
 }
 
+const isTShirt = (name: string) => /\bt-?shirt\b/i.test(name)
+const isShirt = (name: string) => /\bshirt\b/i.test(name) && !isTShirt(name)
+const isRoundNeckTShirt = (name: string) => /\bround neck\b/i.test(name) && isTShirt(name)
+
+/** Products left out of the home-page "New Arrivals" (still listed elsewhere). */
+const NEW_ARRIVAL_HIDDEN: Array<(name: string) => boolean> = [
+  (name) => /\bblack\b/i.test(name) && /\bcollarless\b/i.test(name),
+  (name) => /\bofficial\b/i.test(name) && isShirt(name),
+  (name) => /\bshort[- ]sleeved?\b/i.test(name) && isShirt(name),
+  (name) => /\blong[- ]sleeved?\b/i.test(name) && isTShirt(name),
+]
+
 /**
- * Home-page "New Arrivals" pins, in display order: black and white shirts
- * first, then black and white T-shirts. Everything else follows, newest first.
+ * Home-page "New Arrivals" pins, in display order: navy, grey and black
+ * round-neck T-shirts, then black and white shirts, then black and white
+ * T-shirts. Everything else follows, newest first.
  */
 const NEW_ARRIVAL_PINS: Array<(name: string) => boolean> = [
-  (name) => /\b(black|white)\b/i.test(name) && /\bshirt\b/i.test(name) && !/\bt-?shirt\b/i.test(name),
-  (name) => /\b(black|white)\b/i.test(name) && /\bt-?shirt\b/i.test(name),
+  (name) => /\bnavy\b/i.test(name) && isRoundNeckTShirt(name),
+  (name) => /\bgr[ae]y\b/i.test(name) && isRoundNeckTShirt(name),
+  (name) => /\bblack\b/i.test(name) && isRoundNeckTShirt(name),
+  (name) => /\b(black|white)\b/i.test(name) && isShirt(name),
+  (name) => /\b(black|white)\b/i.test(name) && isTShirt(name),
 ]
 
 function newArrivalRank(name: string): number {
@@ -94,8 +110,13 @@ function newArrivalRank(name: string): number {
 
 export async function getNewArrivals(limit: number): Promise<ProductListItem[]> {
   const products = await getProducts({ sort: 'newest' })
-  // Array.prototype.sort is stable, so each group keeps its newest-first order.
-  return products.sort((a, b) => newArrivalRank(a.name) - newArrivalRank(b.name)).slice(0, limit)
+  return (
+    products
+      .filter((p) => !NEW_ARRIVAL_HIDDEN.some((hidden) => hidden(p.name)))
+      // Array.prototype.sort is stable, so each group keeps its newest-first order.
+      .sort((a, b) => newArrivalRank(a.name) - newArrivalRank(b.name))
+      .slice(0, limit)
+  )
 }
 
 export async function getProducts(params: ProductListParams = {}): Promise<ProductListItem[]> {
@@ -181,6 +202,15 @@ export type CategoryListItem = {
   imageUrl: string | null
 }
 
+/**
+ * Collection thumbnails: a top-level category listed here uses the newest
+ * published product whose name contains every word given. Others use their
+ * newest product.
+ */
+const COLLECTION_THUMBNAIL_PRODUCT: Record<string, string[]> = {
+  shirts: ['white', 'collarless', 'shirt'],
+}
+
 export async function getCollectionCategories(): Promise<CategoryListItem[]> {
   const topLevel = await prisma.category.findMany({
     where: { parentId: null },
@@ -195,13 +225,27 @@ export async function getCollectionCategories(): Promise<CategoryListItem[]> {
         categories: { some: { category: { OR: [{ id: category.id }, { parentId: category.id }] } } },
       }
 
-      const [productCount, product] = await Promise.all([
+      const imageSelect = {
+        images: { orderBy: { position: 'asc' as const }, take: 1, select: { url: true } },
+      }
+      const thumbnailWords = COLLECTION_THUMBNAIL_PRODUCT[category.slug]
+
+      const [productCount, product, preferred] = await Promise.all([
         prisma.product.count({ where }),
-        prisma.product.findFirst({
-          where,
-          orderBy: { createdAt: 'desc' },
-          select: { images: { orderBy: { position: 'asc' }, take: 1, select: { url: true } } },
-        }),
+        prisma.product.findFirst({ where, orderBy: { createdAt: 'desc' }, select: imageSelect }),
+        thumbnailWords
+          ? prisma.product.findFirst({
+              where: {
+                AND: [
+                  where,
+                  ...thumbnailWords.map((word) => ({ name: { contains: word, mode: 'insensitive' as const } })),
+                  { images: { some: {} } },
+                ],
+              },
+              orderBy: { createdAt: 'desc' },
+              select: imageSelect,
+            })
+          : null,
       ])
 
       return {
@@ -209,7 +253,7 @@ export async function getCollectionCategories(): Promise<CategoryListItem[]> {
         name: category.name,
         slug: category.slug,
         productCount,
-        imageUrl: product?.images[0]?.url ?? null,
+        imageUrl: preferred?.images[0]?.url ?? product?.images[0]?.url ?? null,
       }
     }),
   )

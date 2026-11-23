@@ -13,8 +13,6 @@ const anyOf = (...texts: string[]): Prisma.ProductWhereInput => ({ OR: texts.map
 const isTShirt = anyOf('t-shirt', 'tshirt', 't shirt')
 
 const HIDDEN_PRODUCTS: Prisma.ProductWhereInput[] = [
-  // Black Collarless Shirt (other collarless shirts stay visible)
-  { AND: [nameHas('black'), nameHas('collarless')] },
   // All Official Shirts
   nameHas('official'),
   // All Short Sleeved Shirts (not short-sleeve T-shirts)

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { VISIBLE_PRODUCT } from '@/lib/hidden-products'
 
 // Product catalog feed for Meta Commerce Manager (scheduled data feed).
 // `id` must stay the Product.id — the Meta Pixel sends that as content_ids,
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
   const absolute = (url: string) => (url.startsWith('http') ? url : new URL(url, origin).toString())
 
   const products = await prisma.product.findMany({
-    where: { status: 'published' },
+    where: { status: 'published', ...VISIBLE_PRODUCT },
     select: {
       id: true,
       slug: true,

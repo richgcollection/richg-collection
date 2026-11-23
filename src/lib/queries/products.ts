@@ -1,6 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { compareSizes, isSizeOption } from '@/lib/sizes'
+import { VISIBLE_PRODUCT } from '@/lib/hidden-products'
+
+/** Published and not on the hidden list: what customers are allowed to see. */
+const STOREFRONT_PRODUCT: Prisma.ProductWhereInput = { status: 'published', ...VISIBLE_PRODUCT }
 
 export type ProductListItem = {
   id: string
@@ -69,7 +73,7 @@ const LIST_SELECT = {
 
 export async function getFeaturedProducts(limit = 4): Promise<ProductListItem[]> {
   const products = await prisma.product.findMany({
-    where: { status: 'published', featured: true },
+    where: { ...STOREFRONT_PRODUCT, featured: true },
     select: LIST_SELECT,
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -81,14 +85,6 @@ export async function getFeaturedProducts(limit = 4): Promise<ProductListItem[]>
 const isTShirt = (name: string) => /\bt-?shirt\b/i.test(name)
 const isShirt = (name: string) => /\bshirt\b/i.test(name) && !isTShirt(name)
 const isRoundNeckTShirt = (name: string) => /\bround neck\b/i.test(name) && isTShirt(name)
-
-/** Products left out of the home-page "New Arrivals" (still listed elsewhere). */
-const NEW_ARRIVAL_HIDDEN: Array<(name: string) => boolean> = [
-  (name) => /\bblack\b/i.test(name) && /\bcollarless\b/i.test(name),
-  (name) => /\bofficial\b/i.test(name) && isShirt(name),
-  (name) => /\bshort[- ]sleeved?\b/i.test(name) && isShirt(name),
-  (name) => /\blong[- ]sleeved?\b/i.test(name) && isTShirt(name),
-]
 
 /**
  * Home-page "New Arrivals" pins, in display order: navy, grey and black
@@ -110,17 +106,12 @@ function newArrivalRank(name: string): number {
 
 export async function getNewArrivals(limit: number): Promise<ProductListItem[]> {
   const products = await getProducts({ sort: 'newest' })
-  return (
-    products
-      .filter((p) => !NEW_ARRIVAL_HIDDEN.some((hidden) => hidden(p.name)))
-      // Array.prototype.sort is stable, so each group keeps its newest-first order.
-      .sort((a, b) => newArrivalRank(a.name) - newArrivalRank(b.name))
-      .slice(0, limit)
-  )
+  // Array.prototype.sort is stable, so each group keeps its newest-first order.
+  return products.sort((a, b) => newArrivalRank(a.name) - newArrivalRank(b.name)).slice(0, limit)
 }
 
 export async function getProducts(params: ProductListParams = {}): Promise<ProductListItem[]> {
-  const where: Prisma.ProductWhereInput = { status: 'published' }
+  const where: Prisma.ProductWhereInput = { ...STOREFRONT_PRODUCT }
 
   if (params.categorySlug) {
     where.categories = {
@@ -188,7 +179,9 @@ export async function getSubcategories(parentId: string) {
 
 export async function getCategories() {
   return prisma.category.findMany({
-    where: { parentId: { not: null } },
+    // Only subcategories customers can actually shop (e.g. not one whose
+    // products are all hidden).
+    where: { parentId: { not: null }, products: { some: { product: STOREFRONT_PRODUCT } } },
     orderBy: { name: 'asc' },
     select: { id: true, name: true, slug: true },
   })
@@ -221,7 +214,7 @@ export async function getCollectionCategories(): Promise<CategoryListItem[]> {
   return Promise.all(
     topLevel.map(async (category) => {
       const where: Prisma.ProductWhereInput = {
-        status: 'published',
+        ...STOREFRONT_PRODUCT,
         categories: { some: { category: { OR: [{ id: category.id }, { parentId: category.id }] } } },
       }
 
@@ -262,8 +255,9 @@ export async function getCollectionCategories(): Promise<CategoryListItem[]> {
 export type ProductDetail = Awaited<ReturnType<typeof getProductBySlug>>
 
 export async function getProductBySlug(slug: string) {
-  const product = await prisma.product.findUnique({
-    where: { slug, status: 'published' },
+  // Hidden products 404, even from an old link.
+  const product = await prisma.product.findFirst({
+    where: { slug, ...STOREFRONT_PRODUCT },
     include: {
       images: { orderBy: { position: 'asc' } },
       categories: { include: { category: true } },

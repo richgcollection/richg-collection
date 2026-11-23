@@ -2,6 +2,7 @@ import 'server-only'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { sortVariantsBySize } from '@/lib/sizes'
+import { VISIBLE_PRODUCT } from '@/lib/hidden-products'
 
 type Db = PrismaClient | Prisma.TransactionClient
 
@@ -153,7 +154,7 @@ export async function listCategories(): Promise<{ slug: string; name: string; co
     reservedUnits(),
   ])
   const products = await prisma.product.findMany({
-    where: { status: 'published' },
+    where: { status: 'published', ...VISIBLE_PRODUCT },
     select: {
       ...PRODUCT_SELECT,
       categories: { select: { category: { select: { slug: true, parent: { select: { slug: true } } } } } },
@@ -174,7 +175,7 @@ export async function listCategories(): Promise<{ slug: string; name: string; co
 
 /** In-stock products in a category or matching a search, newest first, one page at a time. */
 export async function listProducts(params: { categorySlug?: string; query?: string; page?: number }) {
-  const where: Prisma.ProductWhereInput = { status: 'published' }
+  const where: Prisma.ProductWhereInput = { status: 'published', ...VISIBLE_PRODUCT }
   if (params.categorySlug) Object.assign(where, categoryFilter(params.categorySlug))
   if (params.query) where.name = { contains: params.query, mode: 'insensitive' }
 
@@ -194,7 +195,7 @@ export async function listProducts(params: { categorySlug?: string; query?: stri
 
 export async function getBotProduct(id: string): Promise<BotProduct | null> {
   const [product, reserved] = await Promise.all([
-    prisma.product.findFirst({ where: { id, status: 'published' }, select: PRODUCT_SELECT }),
+    prisma.product.findFirst({ where: { id, status: 'published', ...VISIBLE_PRODUCT }, select: PRODUCT_SELECT }),
     reservedUnits(),
   ])
   return product ? toBotProduct(product, reserved) : null
